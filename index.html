@@ -2,6 +2,8 @@
 <html lang="en-GB">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Quiz Bank</title>
 <meta name="description" content="Offline quiz banks with mock exams, flashcards and pronunciation.">
@@ -13,10 +15,19 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Quiz Bank">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="preload" href="fonts/source-sans-3-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <style>
+/* fonts are bundled in fonts/ so nothing loads from outside the app */
+@font-face{font-family:"Barlow Semi Condensed";font-style:normal;font-weight:500;font-display:swap;src:url(fonts/barlow-semi-condensed-latin-500-normal.woff2) format("woff2")}
+@font-face{font-family:"Barlow Semi Condensed";font-style:normal;font-weight:600;font-display:swap;src:url(fonts/barlow-semi-condensed-latin-600-normal.woff2) format("woff2")}
+@font-face{font-family:"Barlow Semi Condensed";font-style:normal;font-weight:700;font-display:swap;src:url(fonts/barlow-semi-condensed-latin-700-normal.woff2) format("woff2")}
+@font-face{font-family:"Source Sans 3";font-style:normal;font-weight:400;font-display:swap;src:url(fonts/source-sans-3-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:"Source Sans 3";font-style:normal;font-weight:500;font-display:swap;src:url(fonts/source-sans-3-latin-500-normal.woff2) format("woff2")}
+@font-face{font-family:"Source Sans 3";font-style:normal;font-weight:600;font-display:swap;src:url(fonts/source-sans-3-latin-600-normal.woff2) format("woff2")}
+@font-face{font-family:"Source Sans 3";font-style:normal;font-weight:700;font-display:swap;src:url(fonts/source-sans-3-latin-700-normal.woff2) format("woff2")}
+@font-face{font-family:"JetBrains Mono";font-style:normal;font-weight:400;font-display:swap;src:url(fonts/jetbrains-mono-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:"JetBrains Mono";font-style:normal;font-weight:600;font-display:swap;src:url(fonts/jetbrains-mono-latin-600-normal.woff2) format("woff2")}
+
 /* Layout: technician's bench. A slim status bar, one working column (max 920px), cards only for things you can start or answer. Amber is the "status LED" accent. */
 :root{
   --bg:#F2F4F7; --surface:#FFFFFF; --sunk:#E8ECF1; --ink:#152033; --muted:#566275; --line:#D5DBE3;
