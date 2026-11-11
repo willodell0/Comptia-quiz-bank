@@ -1,5 +1,5 @@
 /* Offline support. Bump VERSION whenever app files change so phones pick up the update. */
-const VERSION="qb-2026-11-11c";
+const VERSION="qb-2026-11-11d";
 const SHELL=["./","index.html","app.js","manifest.webmanifest","icons/icon-192.png","icons/icon-512.png","icons/maskable-512.png","icons/apple-touch-icon.png","banks/index.json",
   "fonts/barlow-semi-condensed-latin-500-normal.woff2","fonts/barlow-semi-condensed-latin-600-normal.woff2","fonts/barlow-semi-condensed-latin-700-normal.woff2",
   "fonts/source-sans-3-latin-400-normal.woff2","fonts/source-sans-3-latin-500-normal.woff2","fonts/source-sans-3-latin-600-normal.woff2","fonts/source-sans-3-latin-700-normal.woff2",

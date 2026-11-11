@@ -68,7 +68,7 @@ function progressFor(id){const s=lsGet("qb-progress:"+id,null);if(!s||!s.stats)r
 function library(msg){
   B=null;stopTimer();R=null;F=null;
   document.title="Quiz Bank";
-  setBar("Quiz Bank",`${LIB.length} bank${LIB.length===1?"":"s"}`,false);
+  setBar("Quiz Bank",`${LIB.length} bank${LIB.length===1?"":"s"}`,prevBank?"Back":null);
   document.getElementById("bankfoot").hidden=true;
   const ios=/iphone|ipad|ipod/i.test(navigator.userAgent)&&!window.MSStream;
   const standalone=window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches;
@@ -76,6 +76,7 @@ function library(msg){
   <section class="hero">
     <span class="eyebrow">Your library</span>
     <h1>Pick a quiz bank</h1>
+    ${prevBank?`<div class="line" style="margin-top:4px"><button class="btn main" id="backbank">Back to ${esc(prevBank.title)}</button></div>`:""}
     <p>Each bank keeps its own scores, missed questions and flashcard progress on this device. Add a new bank whenever you start a new course.</p>
   </section>
   ${msg?`<div class="notice ${msg.bad?"bad":""}" role="status">${msg.html}</div>`:""}
@@ -94,11 +95,12 @@ function library(msg){
     <div class="line"><button class="btn" id="bk">Save progress backup</button><label class="btn" for="rs" tabindex="0">Restore from backup</label><input type="file" id="rs" accept=".json,application/json" hidden></div>
   </div>
   ${standalone?"":`<h3 style="margin-top:28px">Install</h3><div class="fsetup" style="margin-top:10px">${installEvt?`<p>Add Quiz Bank to your home screen so it opens like an app and works offline.</p><div class="line"><button class="btn main" id="inst">Install app</button></div>`:ios?`<p>On iPhone or iPad: tap the Share button in Safari, then <b>Add to Home Screen</b>.</p>`:`<p>On Android: open the Chrome menu (three dots) and tap <b>Add to Home screen</b> or <b>Install app</b>.</p>`}</div>`}`;
-  app.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>openBank(LIB[+b.dataset.open].bank)));
+  app.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>{prevBank=null;popSub();openBank(LIB[+b.dataset.open].bank)}));
+  const bb=document.getElementById("backbank");bb&&bb.addEventListener("click",backToBank);
   app.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",async()=>{
     const x=LIB[+b.dataset.del];
     if(b.dataset.sure!=="1"){b.dataset.sure="1";b.textContent="Tap again to remove";setTimeout(()=>{if(b.isConnected){b.dataset.sure="";b.textContent="Remove"}},4000);return}
-    await idbDel(x.bank.id);await loadLibrary();library({html:`Removed <b>${esc(x.bank.title)}</b>. Its progress is still saved, so importing it again picks up where you left off.`});
+    await idbDel(x.bank.id);if(prevBank&&prevBank.id===x.bank.id){prevBank=null;popSub()}await loadLibrary();library({html:`Removed <b>${esc(x.bank.title)}</b>. Its progress is still saved, so importing it again picks up where you left off.`});
   }));
   const kb=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();e.target.click()}};
   app.querySelectorAll("label.btn").forEach(l=>l.addEventListener("keydown",kb));
@@ -124,12 +126,29 @@ function library(msg){
   });
   const inst=document.getElementById("inst");inst&&inst.addEventListener("click",async()=>{try{installEvt.prompt();await installEvt.userChoice}catch(e){}installEvt=null;library()});
 }
-function setBar(title,meta,back){
+function setBar(title,meta,btn){
   document.getElementById("brand").textContent=title;
   document.getElementById("barmeta").textContent=meta;
-  const lb=document.getElementById("libbtn");lb.hidden=!back;
+  const lb=document.getElementById("libbtn");lb.hidden=!btn;if(btn)lb.textContent=btn;
 }
-document.getElementById("libbtn").addEventListener("click",()=>{lsSet("qb-last",null);library()});
+let prevBank=null;
+function toLibrary(){if(B){prevBank=B;pushSub()}lsSet("qb-last",null);library()}
+function backToBank(){const b=prevBank;if(!b)return;prevBank=null;popSub();openBank(b)}
+document.getElementById("libbtn").addEventListener("click",()=>{if(B)toLibrary();else backToBank()});
+
+/* ---------- phone back button / gesture ---------- */
+let ignorePop=false;
+try{history.replaceState({v:"root"},"")}catch(e){}
+function pushSub(){try{if(!history.state||history.state.v!=="sub")history.pushState({v:"sub"},"")}catch(e){}}
+function popSub(){if(ignorePop)return;try{if(history.state&&history.state.v==="sub"){ignorePop=true;history.back()}}catch(e){}}
+window.addEventListener("popstate",()=>{
+  if(ignorePop){ignorePop=false;return}
+  if(R&&!R.done&&R.mode==="exam"&&R.items.some(x=>x.pick!==null)){
+    if(!confirm("Leave this quiz? It won't be marked.")){pushSub();return}
+  }
+  if(R||F){if(B)home();return}
+  if(!B&&prevBank){const b=prevBank;prevBank=null;openBank(b)}
+});
 
 /* ---------- per-bank state ---------- */
 let B=null,Q=[],OBJ={},DOM=null,MODS=null,G=[],byOb={},objKeys=[],S=null,KEY="",settings={},fset={};
@@ -168,7 +187,8 @@ function tabs(){const t=[];if(DOM)t.push(["domain","Exam domains"]);if(MODS)t.pu
 function examsWithDomains(){return B.exams.filter(ex=>DOM&&Object.values(DOM).some(d=>String(d.exam)===String(ex.id)))}
 function home(){
   stopTimer();R=null;F=null;
-  setBar(B.title,`${Q.length} questions`,true);
+  setBar(B.title,`${Q.length} questions`,"All banks");
+  popSub();
   const bf=document.getElementById("bankfoot");bf.textContent=B.footer||"";bf.hidden=!B.footer;
   const missed=S.missed.filter(id=>Q.some(q=>q.id===id)).length;
   const scen=Q.filter(q=>q.s).length;
@@ -305,7 +325,7 @@ function wireFlashTab(el){
   upd();
 }
 let F=null;
-function startFlash(list){stopTimer();R=null;F={cards:shuffle(list),i:0,back:false,got:0,learn:[]};renderFlash()}
+function startFlash(list){pushSub();stopTimer();R=null;F={cards:shuffle(list),i:0,back:false,got:0,learn:[]};renderFlash()}
 function renderFlash(){
   if(F.i>=F.cards.length){flashDone();return}
   const g=F.cards[F.i],n=F.cards.length,termFront=fset.front==="term";
@@ -392,6 +412,7 @@ function start(list,name,opt){
   if(!pool.length)return;
   pool=shuffle(pool);
   if(!opt.all&&settings.count!=="all")pool=pool.slice(0,settings.count);
+  pushSub();
   R={name,mode:opt.mode||settings.mode,items:makeItems(pool),i:0,mock:null,deadline:null};
   render();
 }
@@ -406,6 +427,7 @@ function startMock(exId){
   let pool=[];ks.forEach((k,i)=>{pool=pool.concat(shuffle(Q.filter(q=>domKey(q.ob)===k&&!ex2.has(q.ob))).slice(0,cnt[i]))});
   if(pool.length<total){const have=new Set(pool.map(q=>q.id));pool=pool.concat(shuffle(Q.filter(q=>ks.includes(domKey(q.ob))&&!ex2.has(q.ob)&&!have.has(q.id))).slice(0,total-pool.length))}
   if(!pool.length)return;
+  pushSub();
   R={name:`Mock exam ${ex.name}`,mode:"exam",items:makeItems(shuffle(pool)),i:0,mock:ex,deadline:ex.minutes?Date.now()+(+ex.minutes)*60000:null};
   if(R.deadline)timerId=setInterval(tick,1000);
   render();
@@ -484,6 +506,7 @@ function barRows(groups){
     return `<div class="brow"><div class="nm">${g.label}</div><div class="track"><i style="width:${Math.max(p,2)}%;background:${col}"></i></div><div class="v">${g.c}/${g.n} · ${p}%</div></div>`}).join("");
 }
 function results(done,timeUp){
+  R.done=true;
   const right=done.filter(it=>it.pick===0).length,total=done.length,pct=Math.round(100*right/total);
   const unanswered=done.filter(it=>it.pick===null).length;
   const keyName=R.mock?`mock${R.mock.id}`:R.name;
