@@ -1,0 +1,33 @@
+{
+  "format": "quizbank/1",
+  "id": "example-network-plus",
+  "title": "Example: Network+ starter",
+  "subtitle": "A tiny sample bank to show the format",
+  "version": "2026-11-11",
+  "description": "Replace these with your own questions.",
+  "exams": [
+    {"id": "N10-009", "name": "N10-009 Network+", "questions": 6, "minutes": 10,
+     "note": "Network+ is marked on a 100 to 900 scale with a pass mark of 720."}
+  ],
+  "domains": {
+    "N10-1": {"exam": "N10-009", "code": "1.0", "name": "Networking Concepts", "weight": 50},
+    "N10-2": {"exam": "N10-009", "code": "2.0", "name": "Network Implementation", "weight": 50}
+  },
+  "objectives": {
+    "N10 1.1": {"title": "Explain concepts related to the OSI reference model", "domain": "N10-1", "code": "1.1"},
+    "N10 1.4": {"title": "Explain common networking ports, protocols, services and traffic types", "domain": "N10-1", "code": "1.4"},
+    "N10 2.1": {"title": "Explain characteristics of routing technologies", "domain": "N10-2", "code": "2.1"}
+  },
+  "glossary": [
+    {"term": "OSPF", "stands": "Open Shortest Path First", "sayAs": "", "meaning": "A link-state routing protocol used inside an organisation's network.", "objective": "N10 2.1"},
+    {"term": "TTL", "stands": "Time to Live", "meaning": "A counter in each packet that drops by one at every router, so packets can't loop forever.", "objective": "N10 1.1"}
+  ],
+  "questions": [
+    {"ob": "N10 1.1", "q": "Which OSI layer do routers mainly work at?", "o": ["Layer 3 (Network)", "Layer 2 (Data Link)", "Layer 4 (Transport)", "Layer 7 (Application)"], "e": "Routers forward packets using IP addresses, which belong to Layer 3."},
+    {"ob": "N10 1.1", "q": "Which OSI layer do switches mainly work at?", "o": ["Layer 1 (Physical)", "Layer 2 (Data Link)", "Layer 3 (Network)", "Layer 5 (Session)"], "a": 1, "e": "Switches forward frames using MAC addresses, which belong to Layer 2."},
+    {"ob": "N10 1.4", "q": "Which port does HTTPS use by default?", "o": ["443", "80", "22", "3389"], "e": "HTTPS uses TCP 443. HTTP uses 80."},
+    {"ob": "N10 1.4", "q": "DNS uses UDP port 53 for most lookups.", "o": ["True", "False"], "e": "DNS mostly uses UDP 53, and TCP 53 for zone transfers and large responses."},
+    {"ob": "N10 2.1", "q": "A network admin wants routers to share routes automatically and pick the fastest path inside the company network. Which protocol fits?", "o": ["OSPF", "STP", "ARP", "DHCP"], "e": "OSPF is a link-state routing protocol for internal networks.", "s": 1},
+    {"ob": "N10 2.1", "q": "What does a router do with a packet whose TTL reaches zero?", "o": ["Discards it", "Sends it back to the sender unchanged", "Broadcasts it", "Resets the TTL to 64"], "e": "TTL stops packets looping forever. The router usually sends an ICMP 'time exceeded' message back."}
+  ]
+}
