@@ -51,13 +51,22 @@ function normaliseBank(raw){
   return b;
 }
 
+/* saving a file: hosted on Claude it goes through Claude's download prompt, otherwise a normal download */
+let claudeDownloads=null;
+try{if(window.claude&&typeof window.claude.use==="function")window.claude.use("downloads").then(d=>{claudeDownloads=d}).catch(()=>{})}catch(e){}
+function saveFile(name,text){
+  if(claudeDownloads){claudeDownloads.save({filename:name,data:text}).catch(err=>{if(err&&err.code!=="declined")library({html:"The backup couldn't be saved here. Try again in a moment.",bad:true})});return}
+  if(window.QB_EMBEDDED&&window.claude){library({html:"Saving files isn't available in this view. Open the page in the Claude app or website and try again.",bad:true});return}
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type:"application/json"}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);
+}
 /* ---------- library ---------- */
 let LIB=[];               // [{bank, builtin}]
 let installEvt=null;
 window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installEvt=e;if(!B)library()});
 async function loadLibrary(){
   const out=[];
-  try{
+  if(Array.isArray(window.QB_EMBEDDED)){for(const raw of window.QB_EMBEDDED){try{out.push({bank:normaliseBank(raw),builtin:true})}catch(e){}}}
+  else try{
     const idx=await (await fetch("banks/index.json",{cache:"no-cache"})).json();
     for(const f of idx.banks||[]){try{const raw=await (await fetch("banks/"+f,{cache:"no-cache"})).json();out.push({bank:normaliseBank(raw),builtin:true})}catch(e){console.warn("Built-in bank failed",f,e)}}
   }catch(e){console.warn("No built-in bank list",e)}
@@ -94,7 +103,7 @@ function library(msg){
     <p>Save your progress for every bank as a file, so you can move it to a new phone or browser.</p>
     <div class="line"><button class="btn" id="bk">Save progress backup</button><label class="btn" for="rs" tabindex="0">Restore from backup</label><input type="file" id="rs" accept=".json,application/json" hidden></div>
   </div>
-  ${standalone?"":`<h3 style="margin-top:28px">Install</h3><div class="fsetup" style="margin-top:10px">${installEvt?`<p>Add Quiz Bank to your home screen so it opens like an app and works offline.</p><div class="line"><button class="btn main" id="inst">Install app</button></div>`:ios?`<p>On iPhone or iPad: tap the Share button in Safari, then <b>Add to Home Screen</b>.</p>`:`<p>On Android: open the Chrome menu (three dots) and tap <b>Add to Home screen</b> or <b>Install app</b>.</p>`}</div>`}`;
+  ${standalone||window.QB_EMBEDDED?"":`<h3 style="margin-top:28px">Install</h3><div class="fsetup" style="margin-top:10px">${installEvt?`<p>Add Quiz Bank to your home screen so it opens like an app and works offline.</p><div class="line"><button class="btn main" id="inst">Install app</button></div>`:ios?`<p>On iPhone or iPad: tap the Share button in Safari, then <b>Add to Home Screen</b>.</p>`:`<p>On Android: open the Chrome menu (three dots) and tap <b>Add to Home screen</b> or <b>Install app</b>.</p>`}</div>`}`;
   app.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>{prevBank=null;popSub();openBank(LIB[+b.dataset.open].bank)}));
   const bb=document.getElementById("backbank");bb&&bb.addEventListener("click",backToBank);
   app.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",async()=>{
@@ -118,7 +127,7 @@ function library(msg){
   document.getElementById("bk").addEventListener("click",()=>{
     const data={app:"quizbank",saved:new Date().toISOString(),progress:{}};
     for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith("qb-progress:"))data.progress[k.slice(12)]=lsGet(k,null)}
-    const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(data)],{type:"application/json"}));a.download=`quizbank-progress-${new Date().toISOString().slice(0,10)}.json`;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);
+    saveFile(`quizbank-progress-${new Date().toISOString().slice(0,10)}.json`,JSON.stringify(data));
   });
   document.getElementById("rs").addEventListener("change",async e=>{
     try{const d=JSON.parse(await e.target.files[0].text());if(d.app!=="quizbank"||!d.progress)throw new Error();let n=0;for(const id in d.progress){if(d.progress[id]&&d.progress[id].stats){lsSet("qb-progress:"+id,d.progress[id]);n++}}library({html:`Restored progress for ${n} bank${n===1?"":"s"}.`})}
@@ -678,7 +687,7 @@ document.addEventListener("keydown",e=>{
 });
 
 /* ---------- offline + updates ---------- */
-if("serviceWorker" in navigator&&location.protocol!=="file:"){
+if("serviceWorker" in navigator&&location.protocol!=="file:"&&!window.QB_EMBEDDED){
   navigator.serviceWorker.register("sw.js").then(reg=>{
     reg.addEventListener("updatefound",()=>{const w=reg.installing;w&&w.addEventListener("statechange",()=>{if(w.state==="installed"&&navigator.serviceWorker.controller)showUpdate()})});
   }).catch(()=>{});
