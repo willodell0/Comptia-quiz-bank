@@ -183,7 +183,7 @@ function openBank(bank){
 
 /* ---------- bank home ---------- */
 let homeTab="domain";
-function tabs(){const t=[];if(DOM)t.push(["domain","Exam domains"]);if(MODS)t.push(["module","Course modules"]);t.push(["objective","Objectives"]);if(G.length){t.push(["flash","Flashcards"]);t.push(["say","Pronunciation"])}if(B.coverage)t.push(["coverage","Coverage check"]);return t}
+function tabs(){const t=[];if(DOM)t.push(["domain","Exam domains"]);if(MODS)t.push(["module","Course modules"]);t.push(["objective","Objectives"]);t.push(["progress","Progress"]);if(G.length){t.push(["flash","Flashcards"]);t.push(["say","Pronunciation"])}if(B.coverage)t.push(["coverage","Coverage check"]);return t}
 function examsWithDomains(){return B.exams.filter(ex=>DOM&&Object.values(DOM).some(d=>String(d.exam)===String(ex.id)))}
 function home(){
   stopTimer();R=null;F=null;
@@ -232,6 +232,7 @@ function renderTab(){
   if(homeTab==="module")el.innerHTML=moduleTab();
   if(homeTab==="objective")el.innerHTML=objectiveTab();
   if(homeTab==="coverage")el.innerHTML=coverageTab();
+  if(homeTab==="progress"){el.innerHTML=progressTab();wireProgress(el)}
   if(homeTab==="flash"){el.innerHTML=flashTab();wireFlashTab(el)}
   if(homeTab==="say"){el.innerHTML=sayTab();wireSayTab(el)}
   el.querySelectorAll("[data-start]").forEach(b=>b.addEventListener("click",()=>{
@@ -272,6 +273,103 @@ function objectiveTab(){
   }else h+=`<div class="obj" style="padding:4px 0">${objRows(objKeys)}</div>`;
   return h+`</div>`;
 }
+/* ---------- progress tracking ---------- */
+const dayKey=(d)=>{d=d||new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`};
+const fmtDay=k=>{const [y,m,d]=k.split("-").map(Number);return new Date(y,m-1,d).toLocaleDateString("en-GB",{day:"numeric",month:"short"})};
+function today(){S.days=S.days||{};const k=dayKey();return S.days[k]||(S.days[k]={c:0,n:0,f:0,ob:{}})}
+function logAnswer(ob,ok){const t=today();t.n++;if(ok)t.c++;const o=t.ob[ob]||(t.ob[ob]=[0,0]);if(ok)o[0]++;o[1]++}
+function logSession(x){S.sessions=S.sessions||[];S.sessions.push(Object.assign({t:Date.now()},x));if(S.sessions.length>500)S.sessions=S.sessions.slice(-500);save()}
+function lastDays(n){const out=[];const d=new Date();d.setHours(12,0,0,0);for(let i=n-1;i>=0;i--){const x=new Date(d);x.setDate(d.getDate()-i);out.push(dayKey(x))}return out}
+function streak(){const days=S.days||{};const act=k=>days[k]&&(days[k].n||days[k].f);let d=new Date();d.setHours(12);if(!act(dayKey(d)))d.setDate(d.getDate()-1);let s=0;while(act(dayKey(d))){s++;d.setDate(d.getDate()-1)}return s}
+function groupOf(ob){return DOM?domKey(ob):ob}
+function groupName(g){return DOM?domTitle(g):`${obLabel(g)} ${objTitle(g)}`}
+function groupSeries(g){ // daily accuracy for one group, on days it was practised
+  const days=Object.keys(S.days||{}).sort();const pts=[];
+  for(const k of days){let c=0,n=0;for(const ob in S.days[k].ob){if(groupOf(ob)===g){c+=S.days[k].ob[ob][0];n+=S.days[k].ob[ob][1]}}if(n)pts.push({k,c,n,p:Math.round(100*c/n)})}
+  return pts}
+function spark(pts,label,empty){
+  if(!pts.length)return `<span class="muted spk-empty">${esc(empty||"No daily data yet")}</span>`;
+  const w=120,h=34,pad=5,n=pts.length;
+  const x=i=>n===1?w/2:pad+i*(w-2*pad)/(n-1),y=p=>h-pad-(p/100)*(h-2*pad);
+  const line=pts.map((p,i)=>`${x(i).toFixed(1)},${y(p.p).toFixed(1)}`).join(" ");
+  const last=pts[n-1];
+  return `<svg class="spk" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(label)}: daily accuracy ${pts.map(p=>p.p+"%").join(", ")}">
+    <line x1="${pad}" x2="${w-pad}" y1="${y(80).toFixed(1)}" y2="${y(80).toFixed(1)}" class="ref"/>
+    ${n>1?`<polyline points="${line}" class="ln"/>`:""}
+    ${pts.map((p,i)=>`<circle cx="${x(i).toFixed(1)}" cy="${y(p.p).toFixed(1)}" r="${i===n-1?4:2.5}" class="${i===n-1?"dot last":"dot"}" data-tip="${esc(fmtDay(p.k))}: ${p.c} of ${p.n} correct (${p.p}%)"/>`).join("")}
+  </svg>`}
+function trendText(pts){
+  if(pts.length<2)return "";
+  const cut=dayKey(new Date(Date.now()-6*864e5));
+  const rec=pts.filter(p=>p.k>=cut),old=pts.filter(p=>p.k<cut);
+  const acc=a=>{const c=a.reduce((s,p)=>s+p.c,0),n=a.reduce((s,p)=>s+p.n,0);return n?100*c/n:null};
+  let a=acc(rec),b=acc(old);
+  if(a==null||b==null){a=pts[pts.length-1].p;b=pts[pts.length-2].p}
+  const d=Math.round(a-b);
+  if(Math.abs(d)<3)return '<span class="trend flat">steady</span>';
+  return d>0?`<span class="trend up">up ${d} points</span>`:`<span class="trend down">down ${-d} points</span>`}
+function progressTab(){
+  let N=0,C=0;for(const ob in S.stats){N+=S.stats[ob].n;C+=S.stats[ob].c}
+  const days=S.days||{};const active=Object.keys(days).filter(k=>days[k].n||days[k].f);
+  const sess=S.sessions||[];const mocks=sess.filter(s=>s.mock!=null);
+  const cards=Object.values(days).reduce((a,d)=>a+(d.f||0),0);
+  const tdy=days[dayKey()]||{n:0,c:0,f:0};
+  const tiles=[
+    ["Questions answered",N.toLocaleString("en-GB"),tdy.n?`${tdy.n} today`:"none yet today"],
+    ["Overall accuracy",N?Math.round(100*C/N)+"%":"–",N?`${C.toLocaleString("en-GB")} correct`:"answer some questions"],
+    ["Study streak",`${streak()} day${streak()===1?"":"s"}`,`${active.length} day${active.length===1?"":"s"} studied in total`],
+    ["Mock exams",String(mocks.length),cards?`${cards} flashcards reviewed`:"timed, weighted like the real exam"]];
+  let h=`<div class="tiles">${tiles.map(t=>`<div class="tile"><span class="tl">${t[0]}</span><span class="tv">${esc(t[1])}</span><span class="ts">${esc(t[2])}</span></div>`).join("")}</div>`;
+  if(N&&!active.length)h+=`<p class="notice">Your earlier answers are counted in the totals. Daily charts start from today, as the app didn't record dates before this update.</p>`;
+  // daily activity
+  const span=lastDays(30);const max=Math.max(1,...span.map(k=>(days[k]&&days[k].n)||0));
+  const nice=max<=10?10:max<=20?20:max<=50?50:Math.ceil(max/50)*50;
+  h+=`<div class="pcard"><div class="phead"><h3>Questions per day</h3><span class="muted">last 30 days</span></div>
+    <div class="dchart" role="img" aria-label="Questions answered per day over the last 30 days. ${span.filter(k=>days[k]&&days[k].n).map(k=>`${fmtDay(k)}: ${days[k].n}`).join(", ")||"No questions yet"}">
+      <span class="ymax">${nice}</span>
+      <div class="cols">${span.map(k=>{const d=days[k];const n=d?d.n:0;const p=n?Math.round(100*d.c/n):null;
+        return `<div class="col" data-tip="${esc(fmtDay(k))}: ${n} question${n===1?"":"s"}${p!=null?`, ${p}% correct`:""}${d&&d.f?`, ${d.f} flashcards`:""}">${n?`<i style="height:${Math.max(3,100*n/nice)}%"></i>`:""}</div>`}).join("")}</div>
+      <div class="xax"><span>${esc(fmtDay(span[0]))}</span><span>${esc(fmtDay(span[15]))}</span><span>Today</span></div>
+    </div>
+    <details class="tview"><summary>Show as a table</summary><div class="tablewrap"><table><thead><tr><th>Day</th><th>Questions</th><th>Correct</th><th>Flashcards</th></tr></thead><tbody>${active.slice().sort().reverse().map(k=>`<tr><td>${esc(fmtDay(k))}</td><td class="n">${days[k].n}</td><td class="n">${days[k].n?Math.round(100*days[k].c/days[k].n)+"%":"–"}</td><td class="n">${days[k].f||0}</td></tr>`).join("")||'<tr><td colspan="4">Nothing recorded yet.</td></tr>'}</tbody></table></div></details></div>`;
+  // by domain / objective
+  const groups=DOM?Object.keys(DOM).sort(natCmp):objKeys.filter(o=>byOb[o]);
+  const rows=groups.map(g=>{let c=0,n=0;for(const ob in S.stats)if(groupOf(ob)===g){c+=S.stats[ob].c;n+=S.stats[ob].n}
+    const total=DOM?Q.filter(q=>domKey(q.ob)===g).length:(byOb[g]||[]).length;return{g,c,n,p:n?Math.round(100*c/n):null,total,pts:groupSeries(g)}}).filter(r=>r.total);
+  const sortBy=lsGet("qb-psort:"+B.id,"weak");
+  const sorted=sortBy==="weak"?rows.slice().sort((a,b)=>(a.p==null)-(b.p==null)||(a.p-b.p)||natCmp(a.g,b.g)):rows;
+  h+=`<div class="pcard"><div class="phead"><h3>${DOM?"By exam domain":"By objective"}</h3><span class="seg" id="psort"><button data-s="weak" aria-pressed="${sortBy==="weak"}">Weakest first</button><button data-s="order" aria-pressed="${sortBy!=="weak"}">Exam order</button></span></div>
+    <p class="muted small">The line shows your accuracy on each day you practised that area. The faint line marks 80%.</p>
+    <div class="prows">${sorted.map(r=>`<div class="prow2"><div class="pt2"><b>${esc(groupName(r.g))}</b><span class="sub">${DOM&&DOM[r.g]&&B.exams.find(e=>String(e.id)===String(DOM[r.g].exam))?esc(B.exams.find(e=>String(e.id)===String(DOM[r.g].exam)).name)+" · ":""}${r.n?`${r.n} answered`:"not tried yet"} · ${r.total} in the bank ${trendText(r.pts)}</span></div>
+      <div class="pviz">${spark(r.pts,groupName(r.g))}</div><div class="acts">${pctChip(r.p)}<button class="go" data-start="${DOM?"dom":"ob"}|${esc(r.g)}">Practise</button></div></div>`).join("")}</div></div>`;
+  // focus next
+  const weak=Object.keys(S.stats).filter(ob=>byOb[ob]&&S.stats[ob].n>=3).map(ob=>({ob,p:Math.round(100*S.stats[ob].c/S.stats[ob].n),n:S.stats[ob].n})).filter(x=>x.p<80).sort((a,b)=>a.p-b.p||b.n-a.n).slice(0,6);
+  h+=`<div class="pcard"><div class="phead"><h3>Focus next</h3><span class="muted">objectives under 80%, tried 3+ times</span></div>
+    ${weak.length?`<div class="prows">${weak.map(x=>`<div class="orow"><span class="code">${esc(obLabel(x.ob))}</span><span class="ot">${esc(objTitle(x.ob))}<span class="sub"> · ${x.n} answered</span></span><span class="acts">${pctChip(x.p)}<button class="go ghost" data-start="ob|${esc(x.ob)}">Practise</button></span></div>`).join("")}</div>`:`<p class="empty">${N?"Nothing under 80% with enough attempts yet. Keep going.":"Answer a few questions and your weakest objectives will show up here."}</p>`}</div>`;
+  // mocks
+  if(examsWithDomains().length){
+    h+=`<div class="pcard"><div class="phead"><h3>Mock exam scores</h3><span class="muted">faint line marks 80%</span></div>`;
+    for(const ex of examsWithDomains()){const m=mocks.filter(s=>String(s.mock)===String(ex.id));
+      const pts=m.slice(-12).map(s=>({k:dayKey(new Date(s.t)),c:s.c,n:s.n,p:Math.round(100*s.c/s.n)}));
+      h+=`<div class="prow2"><div class="pt2"><b>${esc(ex.name)}</b><span class="sub">${m.length?`${m.length} taken · best ${Math.max(...m.map(s=>Math.round(100*s.c/s.n)))}% · last ${pts[pts.length-1].p}%`:"not taken yet"}</span></div><div class="pviz">${spark(pts,ex.name+" mock scores","No mocks taken yet")}</div><div class="acts"><button class="go" data-act2="mock" data-exam="${esc(ex.id)}">Take mock</button></div></div>`}
+    h+=`</div>`}
+  // recent sessions
+  const recent=sess.slice(-8).reverse();
+  if(recent.length)h+=`<div class="pcard"><div class="phead"><h3>Recent sessions</h3></div><div class="tablewrap"><table><thead><tr><th>When</th><th>Session</th><th>Score</th></tr></thead><tbody>${recent.map(s=>`<tr><td>${esc(new Date(s.t).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}))}</td><td>${esc(s.name)}</td><td class="n">${s.kind==="flash"?`${s.c}/${s.n} known`:`${s.c}/${s.n} · ${Math.round(100*s.c/s.n)}%`}</td></tr>`).join("")}</tbody></table></div></div>`;
+  return h;
+}
+function wireProgress(el){
+  el.querySelectorAll("#psort button").forEach(b=>b.addEventListener("click",()=>{lsSet("qb-psort:"+B.id,b.dataset.s);renderTab()}));
+  el.querySelectorAll("[data-act2=mock]").forEach(b=>b.addEventListener("click",()=>startMock(b.dataset.exam)));
+}
+/* tooltip for charts: hover on desktop, tap on phones */
+const tip=document.createElement("div");tip.id="tip";tip.hidden=true;document.body.appendChild(tip);
+function showTip(t,e){tip.textContent=t.dataset.tip;tip.hidden=false;const r=t.getBoundingClientRect();const tw=tip.offsetWidth;let x=r.left+r.width/2-tw/2;x=Math.max(8,Math.min(x,innerWidth-tw-8));tip.style.left=x+"px";tip.style.top=(r.top+scrollY-tip.offsetHeight-8)+"px"}
+document.addEventListener("pointerover",e=>{const t=e.target.closest&&e.target.closest("[data-tip]");if(t&&e.pointerType==="mouse")showTip(t,e)});
+document.addEventListener("pointerout",e=>{if(e.pointerType==="mouse"&&e.target.closest&&e.target.closest("[data-tip]"))tip.hidden=true});
+document.addEventListener("click",e=>{const t=e.target.closest&&e.target.closest("[data-tip]");if(t)showTip(t,e);else tip.hidden=true});
+addEventListener("scroll",()=>{tip.hidden=true},{passive:true});
+
 function coverageTab(){
   const c=B.coverage;let h=`<div class="note">${c.title?`<h3>${esc(c.title)}</h3>`:""}${c.intro?`<p>${esc(c.intro)}</p>`:""}`;
   if(c.table&&Array.isArray(c.table.rows))h+=`<div class="tablewrap"><table><thead><tr>${(c.table.head||[]).map(x=>`<th>${esc(x)}</th>`).join("")}</tr></thead><tbody>${c.table.rows.map(r=>`<tr>${r.map((x,i)=>`<td class="${i?"mono":""}">${esc(x)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
@@ -368,6 +466,7 @@ function mark(ok){
 }
 function flashDone(){
   const seen=F.got+F.learn.length;
+  if(seen&&!F.logged){F.logged=true;today().f+=seen;logSession({kind:"flash",name:"Flashcards",c:F.got,n:seen})}
   if(!seen){F=null;homeTab="flash";home();return}
   app.innerHTML=`
   <div class="qtop"><h2>Flashcards: session done</h2></div>
@@ -487,6 +586,7 @@ function next(){
 function record(it){
   const ob=it.q.ob,ok=it.pick===0;
   const st=S.stats[ob]||(S.stats[ob]={c:0,n:0});st.n++;if(ok)st.c++;
+  logAnswer(ob,ok);
   const idx=S.missed.indexOf(it.q.id);
   if(!ok&&idx<0)S.missed.push(it.q.id);
   if(ok&&idx>=0)S.missed.splice(idx,1);
@@ -507,6 +607,7 @@ function barRows(groups){
 }
 function results(done,timeUp){
   R.done=true;
+  {const r=done.filter(it=>it.pick===0).length;logSession({kind:R.mock?"mock":"quiz",name:R.name,mock:R.mock?R.mock.id:null,c:r,n:done.length})}
   const right=done.filter(it=>it.pick===0).length,total=done.length,pct=Math.round(100*right/total);
   const unanswered=done.filter(it=>it.pick===null).length;
   const keyName=R.mock?`mock${R.mock.id}`:R.name;
