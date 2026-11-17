@@ -52,7 +52,17 @@ function normaliseBank(raw){
     steps:Array.isArray(x.steps)?x.steps.filter(y=>typeof y==="string"):[],commands:Array.isArray(x.commands)?x.commands.filter(y=>typeof y==="string"):[],
     needs:Array.isArray(x.needs)?x.needs.filter(y=>typeof y==="string"):[],files:Array.isArray(x.files)?x.files.filter(y=>typeof y==="string"):[],
     shots:Array.isArray(x.shots)?x.shots.filter(y=>typeof y==="string"):[],tier:["top","good","skip"].includes(x.tier)?x.tier:"",
-    link:typeof x.link==="string"&&/^https:\/\//i.test(x.link)?x.link:""}));
+    link:typeof x.link==="string"&&/^https:\/\//i.test(x.link)?x.link:"",group:typeof x.group==="string"?x.group:""}));
+  const str=v=>typeof v==="string"?v:"";const pids=new Set();
+  b.practice=(Array.isArray(raw.practice)?raw.practice:[]).filter(d=>d&&typeof d.title==="string"&&d.title.trim()&&["subnet","match","exhibit","order"].includes(d.type)).map((d,i)=>{
+    let id=slug(d.id||d.title);while(pids.has(id))id+="x";pids.add(id);
+    const o={id,type:d.type,title:d.title,intro:str(d.intro),ob:str(d.ob)};
+    if(d.type==="match"){o.cols=Array.isArray(d.cols)&&d.cols.length===2?d.cols.map(String):["Item","Answer"];o.both=!!d.both;o.round=Math.max(3,Math.min(10,+d.round||6));
+      o.pairs=(Array.isArray(d.pairs)?d.pairs:[]).filter(x=>Array.isArray(x)&&typeof x[0]==="string"&&typeof x[1]==="string"&&x[0].trim()&&x[1].trim()).map(x=>[x[0],x[1]]);if(o.pairs.length<3)return null}
+    if(d.type==="exhibit"){o.items=(Array.isArray(d.items)?d.items:[]).filter(x=>x&&typeof x.q==="string"&&Array.isArray(x.o)&&x.o.length>=2&&x.o.length<=6&&x.o.every(y=>typeof y==="string"&&y.trim())).map(x=>({x:str(x.x),q:x.q,o:x.o.slice(),e:str(x.e)}));if(!o.items.length)return null}
+    if(d.type==="order"){o.sets=(Array.isArray(d.sets)?d.sets:[]).filter(x=>x&&Array.isArray(x.items)&&x.items.length>=3&&x.items.length<=12&&x.items.every(y=>typeof y==="string"&&y.trim())&&new Set(x.items).size===x.items.length).map(x=>({title:str(x.title)||o.title,intro:str(x.intro),items:x.items.slice(),e:str(x.e)}));if(!o.sets.length)return null}
+    return o}).filter(Boolean);
+  b.labsIntro=typeof raw.labsIntro==="string"?raw.labsIntro:"";
   b.labels=Object.assign({gap:"Extra",noModule:"Other questions",noModuleSub:"not linked to a module",module:"Module"},b.labels||{});
   b._problems=problems;
   return b;
@@ -162,7 +172,7 @@ window.addEventListener("popstate",()=>{
   if(R&&!R.done&&R.mode==="exam"&&!window.QB_EMBEDDED&&R.items.some(x=>x.pick!==null)){
     if(!confirm("Leave this quiz? It won't be marked.")){pushSub();return}
   }
-  if(R||F){if(B)home();return}
+  if(R||F||P){if(B)home();return}
   if(!B&&prevBank){const b=prevBank;prevBank=null;openBank(b)}
 });
 
@@ -199,10 +209,10 @@ function openBank(bank){
 
 /* ---------- bank home ---------- */
 let homeTab="domain";
-function tabs(){const t=[];if(DOM)t.push(["domain","Exam domains"]);if(MODS)t.push(["module","Course modules"]);t.push(["objective","Objectives"]);t.push(["progress","Progress"]);if(G.length){t.push(["flash","Flashcards"]);t.push(["say","Pronunciation"])}if(B.labs.length)t.push(["labs","Labs"]);if(B.coverage)t.push(["coverage","Coverage check"]);return t}
+function tabs(){const t=[];if(DOM)t.push(["domain","Exam domains"]);if(MODS)t.push(["module","Course modules"]);t.push(["objective","Objectives"]);if(B.practice.length)t.push(["practice","Practice"]);t.push(["progress","Progress"]);if(G.length){t.push(["flash","Flashcards"]);t.push(["say","Pronunciation"])}if(B.labs.length)t.push(["labs","Labs"]);if(B.coverage)t.push(["coverage","Coverage check"]);return t}
 function examsWithDomains(){return B.exams.filter(ex=>DOM&&Object.values(DOM).some(d=>String(d.exam)===String(ex.id)))}
 function home(){
-  stopTimer();R=null;F=null;
+  stopTimer();R=null;F=null;logDrill();P=null;
   setBar(B.title,`${Q.length} questions`,"All banks");
   popSub();
   const bf=document.getElementById("bankfoot");bf.textContent=B.footer||"";bf.hidden=!B.footer;
@@ -228,6 +238,7 @@ function home(){
     <span class="seg" id="seg-count">${[10,20,40,"all"].map(n=>`<button data-count="${n}" aria-pressed="${settings.count==n}">${n==="all"?"All":n}</button>`).join("")}</span>
     ${scen?`<label><input type="checkbox" id="scen" ${settings.scenario?"checked":""}> Scenario questions only</label>`:""}
   </div>
+  <label class="tabsel"><span class="lbl">Show</span><select id="tabsel" aria-label="Choose a section">${tl.map(([k,t])=>`<option value="${k}" ${homeTab===k?"selected":""}>${t}</option>`).join("")}</select></label>
   <div class="tabs" role="tablist">${tl.map(([k,t])=>`<button role="tab" data-tab="${k}" aria-selected="${homeTab===k}">${t}</button>`).join("")}</div>
   <section id="tabbody"></section>`;
   renderTab();
@@ -240,7 +251,9 @@ function home(){
   app.querySelectorAll("#seg-mode button").forEach(b=>b.addEventListener("click",()=>{settings.mode=b.dataset.mode;saveSettings();home()}));
   app.querySelectorAll("#seg-count button").forEach(b=>b.addEventListener("click",()=>{settings.count=b.dataset.count==="all"?"all":+b.dataset.count;saveSettings();home()}));
   const sc=document.getElementById("scen");sc&&sc.addEventListener("change",e=>{settings.scenario=e.target.checked;saveSettings();renderTab()});
-  app.querySelectorAll("[data-tab]").forEach(b=>b.addEventListener("click",()=>{homeTab=b.dataset.tab;lsSet("qb-tab:"+B.id,homeTab);app.querySelectorAll("[data-tab]").forEach(x=>x.setAttribute("aria-selected",x===b));renderTab()}));
+  const setTab=k=>{homeTab=k;lsSet("qb-tab:"+B.id,homeTab);app.querySelectorAll("[data-tab]").forEach(x=>x.setAttribute("aria-selected",x.dataset.tab===k));const ts=document.getElementById("tabsel");if(ts)ts.value=k;renderTab()};
+  app.querySelectorAll("[data-tab]").forEach(b=>b.addEventListener("click",()=>setTab(b.dataset.tab)));
+  document.getElementById("tabsel").addEventListener("change",e=>setTab(e.target.value));
 }
 function renderTab(){
   const el=document.getElementById("tabbody");
@@ -250,6 +263,7 @@ function renderTab(){
   if(homeTab==="coverage")el.innerHTML=coverageTab();
   if(homeTab==="progress"){el.innerHTML=progressTab();wireProgress(el)}
   if(homeTab==="labs"){el.innerHTML=labsTab();wireLabs(el)}
+  if(homeTab==="practice"){el.innerHTML=practiceTab();wirePractice(el)}
   if(homeTab==="flash"){el.innerHTML=flashTab();wireFlashTab(el)}
   if(homeTab==="say"){el.innerHTML=sayTab();wireSayTab(el)}
   el.querySelectorAll("[data-start]").forEach(b=>b.addEventListener("click",()=>{
@@ -337,6 +351,7 @@ function progressTab(){
     ["Study streak",`${streak()} day${streak()===1?"":"s"}`,`${active.length} day${active.length===1?"":"s"} studied in total`],
     ["Mock exams",String(mocks.length),cards?`${cards} flashcards reviewed`:"timed, weighted like the real exam"]];
   if(B.labs.length){const done=B.labs.filter(l=>(S.labsDone||[]).includes(l.code)).length;tiles.push(["Labs done",`${done} of ${B.labs.length}`,done===B.labs.length?"all labs ticked off":"tick labs off in the Labs tab"])}
+  if(B.practice.length){let pc=0,pn=0,pr=0;for(const k in (S.practice||{})){if(k==="_set")continue;pc+=S.practice[k].c;pn+=S.practice[k].n;pr+=S.practice[k].runs||0}tiles.push(["Practice drills",pn?Math.round(100*pc/pn)+"%":"–",pn?`${pn} answered in ${pr} session${pr===1?"":"s"}`:"try the Practice tab"])}
   let h=`<div class="tiles">${tiles.map(t=>`<div class="tile"><span class="tl">${t[0]}</span><span class="tv">${esc(t[1])}</span><span class="ts">${esc(t[2])}</span></div>`).join("")}</div>`;
   if(N&&!active.length)h+=`<p class="notice">Your earlier answers are counted in the totals. Daily charts start from today, as the app didn't record dates before this update.</p>`;
   // daily activity
@@ -392,15 +407,15 @@ addEventListener("scroll",()=>{tip.hidden=true},{passive:true});
 /* ---------- labs ---------- */
 function labsTab(){
   const done=new Set(S.labsDone||[]);const n=B.labs.filter(l=>done.has(l.code)).length;
-  const groups={};for(const l of B.labs){const m=l.code.split(".")[0];const k=MODS&&m in MODS?"m:"+m:(l.ob&&DOM?domKey(l.ob):"_");(groups[k]=groups[k]||[]).push(l)}
-  let h=`<div class="fsetup"><p>${B.labs.length} hands-on labs from your course. Each card says what the lab practises and the key steps and commands to remember. Tick a lab off when you've done it. You've done <b>${n} of ${B.labs.length}</b>.</p>
+  const groups={};for(const l of B.labs){const m=l.code.split(".")[0];const k=l.group?"g:"+l.group:MODS&&m in MODS?"m:"+m:(l.ob&&DOM?domKey(l.ob):"_");(groups[k]=groups[k]||[]).push(l)}
+  let h=`<div class="fsetup"><p>${B.labsIntro?esc(B.labsIntro):`${B.labs.length} hands-on labs from your course. Each card says what the lab practises and the key steps and commands to remember.`} Tick a lab off when you've done it. You've done <b>${n} of ${B.labs.length}</b>.</p>
     <div class="progress" aria-hidden="true"><i style="width:${100*n/B.labs.length}%"></i></div></div>
   ${B.labTips?`<details class="obj tips" data-tips="1"${lsGet("qb-tipsopen:"+B.id,true)?" open":""}><summary><span>${esc(B.labTips.title)}</span></summary><div class="inner">${B.labTips.intro?`<p>${esc(B.labTips.intro)}</p>`:""}<ul>${B.labTips.tips.map(t=>`<li><b>${esc(t[0])}</b> ${esc(t[1])}</li>`).join("")}</ul></div></details>`:""}
   <div class="rows">`;
   let opened=false;
-  for(const k of Object.keys(groups).sort(natCmp)){const ls=groups[k];const dn=ls.filter(l=>done.has(l.code)).length;
+  const gk=Object.keys(groups);for(const k of (gk.every(x=>x.startsWith("g:"))?gk:gk.sort(natCmp))){const ls=groups[k];const dn=ls.filter(l=>done.has(l.code)).length;
     const op=(lsGet("qb-labopen:"+B.id,null)===k)||(!opened&&lsGet("qb-labopen:"+B.id,null)==null&&dn<ls.length);if(op)opened=true;
-    h+=`<details class="obj" data-grp="${esc(k)}"${op?" open":""}><summary><span>${esc(k==="_"?"Labs":k.startsWith("m:")?modName(k.slice(2)):domTitle(k))} <span class="muted">· ${dn} of ${ls.length} done</span></span></summary><div class="inner">`;
+    h+=`<details class="obj" data-grp="${esc(k)}"${op?" open":""}><summary><span>${esc(k==="_"?"Labs":k.startsWith("g:")?k.slice(2):k.startsWith("m:")?modName(k.slice(2)):domTitle(k))} <span class="muted">· ${dn} of ${ls.length} done</span></span></summary><div class="inner">`;
     for(const l of ls){const d=done.has(l.code);
       h+=`<div class="lab ${d?"done":""}"><div class="labhead"><label class="labtick"><input type="checkbox" data-lab="${esc(l.code)}" ${d?"checked":""}> <span class="code">${esc(l.code)}</span> <b>${esc(l.title)}</b></label><span class="chips">${l.tier==="top"?'<span class="tag pick">Portfolio pick</span>':""}${l.ob?`<span class="tag">${esc(obLabel(l.ob))}</span>`:""}</span></div>
         ${l.summary?`<p class="labsum">${esc(l.summary)}</p>`:""}
@@ -420,6 +435,144 @@ function wireLabs(el){
   el.querySelectorAll("[data-lab]").forEach(c=>c.addEventListener("change",()=>{
     S.labsDone=(S.labsDone||[]).filter(x=>x!==c.dataset.lab);if(c.checked){S.labsDone.push(c.dataset.lab);today().l=(today().l||0)+1}save();
     const y=scrollY;renderTab();scrollTo(0,y)}));
+}
+/* ---------- practice drills ---------- */
+let P=null;
+const rnd=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
+const n2ip=n=>[n>>>24,(n>>>16)&255,(n>>>8)&255,n&255].join(".");
+const ip2n=s=>{const p=String(s).trim().split(".");if(p.length!==4)return null;let n=0;for(const x of p){if(!/^\d{1,3}$/.test(x)||+x>255)return null;n=n*256+(+x)}return n};
+const maskN=p=>p<=0?0:(0xFFFFFFFF<<(32-p))>>>0;
+const ORD=["first","second","third","fourth"];
+function pset(){S.practice=S.practice||{};return S.practice._set||(S.practice._set={kind:"mix",level:"easy"})}
+function dstat(id){S.practice=S.practice||{};return S.practice[id]||(S.practice[id]={c:0,n:0,runs:0,best:null})}
+function subnetWhy(ip,pre){
+  const m=maskN(pre),net=(ip&m)>>>0,bc=(net|(~m>>>0))>>>0,idx=Math.min(3,Math.floor(pre/8)),mo=(m>>>(24-8*idx))&255,blk=256-mo;
+  const ov=(ip>>>(24-8*idx))&255,st=Math.floor(ov/blk)*blk,hosts=Math.pow(2,32-pre)-2;
+  return `/${pre} is ${n2ip(m)}. The interesting octet is the ${ORD[idx]}, where the block size is 256 - ${mo} = ${blk}. ${ov} falls in the block ${st} to ${st+blk-1}, so the network ID is ${n2ip(net)} and the broadcast is ${n2ip(bc)}. Usable hosts: 2^${32-pre} - 2 = ${hosts.toLocaleString("en-GB")}.`}
+function randIp(hard){const t=rnd(0,2);const a=t===0?[192,168]:t===1?[10,rnd(0,255)]:[172,rnd(16,31)];return ((a[0]*16777216)+(a[1]*65536)+(rnd(0,255)*256)+rnd(0,255))>>>0}
+function subnetCard(){
+  const st=pset(),hard=st.level==="hard",lo=hard?16:24;
+  const kinds=["break","break","hosts","same","mask"];const kind=st.kind==="mix"?kinds[rnd(0,kinds.length-1)]:st.kind;
+  if(kind==="break"){
+    const pre=rnd(lo,30),m=maskN(pre);let ip,net,bc;
+    do{ip=randIp(hard);net=(ip&m)>>>0;bc=(net|(~m>>>0))>>>0}while(ip===net||ip===bc);
+    return{t:"fields",prompt:`Break down <b class="mono">${n2ip(ip)}/${pre}</b>`,fields:[
+      {k:"net",label:"Network ID",type:"ip",ans:n2ip(net)},{k:"first",label:"First usable host",type:"ip",ans:n2ip(net+1)},
+      {k:"last",label:"Last usable host",type:"ip",ans:n2ip(bc-1)},{k:"bc",label:"Broadcast",type:"ip",ans:n2ip(bc)},
+      {k:"hosts",label:"Usable hosts",type:"int",ans:String(Math.pow(2,32-pre)-2)}],why:subnetWhy(ip,pre)}}
+  if(kind==="hosts"){
+    const pre=rnd(lo,30),cap=Math.pow(2,32-pre)-2,low=Math.max(2,Math.pow(2,31-pre)-1),need=rnd(low,cap);
+    return{t:"fields",prompt:`A subnet needs <b>${need.toLocaleString("en-GB")}</b> usable host addresses. What is the smallest subnet that fits?`,fields:[
+      {k:"pre",label:"Prefix (for example /26)",type:"prefix",ans:String(pre)},{k:"mask",label:"Subnet mask",type:"ip",ans:n2ip(maskN(pre))}],
+      why:`/${pre} gives 2^${32-pre} - 2 = ${cap.toLocaleString("en-GB")} usable hosts.${pre<30?` One size smaller, /${pre+1}, gives only ${(Math.pow(2,31-pre)-2).toLocaleString("en-GB")}, which isn't enough.`:""} The mask for /${pre} is ${n2ip(maskN(pre))}.`}}
+  if(kind==="same"){
+    const pre=rnd(lo,29),m=maskN(pre),size=Math.pow(2,32-pre);let a,net;
+    do{a=randIp(hard);net=(a&m)>>>0}while(a===net||a===net+size-1);
+    const same=Math.random()<.5,bnet=same?net:(Math.random()<.5&&net>=size?net-size:net+size)>>>0;let b;
+    do{b=(bnet+rnd(1,size-2))>>>0}while(b===a);
+    const yes=((b&m)>>>0)===net;
+    return{t:"choice",prompt:`Are <b class="mono">${n2ip(a)}/${pre}</b> and <b class="mono">${n2ip(b)}/${pre}</b> on the same subnet?`,opts:["Yes, same subnet","No, different subnets"],ans:yes?0:1,
+      why:`${n2ip(a)} is in ${n2ip(net)}/${pre} and ${n2ip(b)} is in ${n2ip((b&m)>>>0)}/${pre}. ${subnetWhy(a,pre).split(". ").slice(0,2).join(". ")}.`}}
+  const pre=rnd(hard?8:24,30);
+  if(Math.random()<.5)return{t:"fields",prompt:`Write <b class="mono">/${pre}</b> as a dotted decimal subnet mask.`,fields:[{k:"mask",label:"Subnet mask",type:"ip",ans:n2ip(maskN(pre))}],
+    why:`/${pre} means ${pre} ones followed by ${32-pre} zeros, which is ${n2ip(maskN(pre))}.`};
+  return{t:"fields",prompt:`Write <b class="mono">${n2ip(maskN(pre))}</b> as a CIDR prefix.`,fields:[{k:"pre",label:"Prefix (for example /26)",type:"prefix",ans:String(pre)}],
+    why:`${n2ip(maskN(pre))} has ${pre} bits set to 1, so it's /${pre}.`};
+}
+function drillCards(d){
+  if(d.type==="subnet"){const c=[];for(let i=0;i<10;i++)c.push(subnetCard());return c}
+  if(d.type==="exhibit")return shuffle(d.items).slice(0,10).map(x=>{const ord=shuffle(x.o.map((_,i)=>i));return{t:"choice",x:x.x,prompt:esc(x.q),opts:ord.map(i=>x.o[i]),ans:ord.indexOf(0),why:x.e}});
+  if(d.type==="order")return shuffle(d.sets).map(s=>{let cur;do{cur=shuffle(s.items.map((_,i)=>i))}while(cur.every((v,i)=>v===i));return{t:"order",prompt:esc(s.title),intro:s.intro,items:s.items,cur,why:s.e}});
+  const pairs=shuffle(d.pairs),out=[];
+  for(let i=0;i<pairs.length;i+=d.round){let grp=pairs.slice(i,i+d.round);if(grp.length<3&&out.length){out[out.length-1].grp=out[out.length-1].grp.concat(grp);continue}out.push({grp})}
+  return out.map(o=>{const rev=d.both&&Math.random()<.5,A=rev?1:0,Bk=rev?0:1;
+    const rows=o.grp.map(p=>({p:p[A],ok:d.pairs.filter(x=>x[A]===p[A]).map(x=>x[Bk])}));
+    const opts=new Set(o.grp.map(p=>p[Bk]));for(const x of shuffle(d.pairs)){if(opts.size>=o.grp.length+2)break;opts.add(x[Bk])}
+    return{t:"match",cols:rev?[d.cols[1],d.cols[0]]:d.cols,rows,opts:[...opts].sort((a,b)=>a.localeCompare(b,"en",{numeric:true}))}})}
+function drillSize(d){
+  if(d.type==="subnet")return "10 fresh questions each time";
+  if(d.type==="match")return `${d.pairs.length} to match`;
+  if(d.type==="exhibit")return `${d.items.length} exhibits${d.items.length>10?", 10 at a time":""}`;
+  return `${d.sets.length} to put in order`}
+const DINTRO={subnet:"Work out network IDs, broadcasts, host ranges and masks. A new set of numbers every time.",match:"Match each item to the right answer, like the drag-and-drop questions in the exam.",exhibit:"Read the output and work out what it's telling you.",order:"Put the steps in the right order."};
+function practiceTab(){
+  const st=pset();
+  let h=`<div class="fsetup"><p>Drills in the style of the hands-on questions at the start of the real exam.${B.practice.some(d=>d.type==="subnet")?" Subnetting questions are made up fresh each time, so you can't learn the answers off by heart.":""} Drills count towards your daily activity on the Progress tab.</p></div><div class="drills">`;
+  for(const d of B.practice){const s=(S.practice||{})[d.id];const p=s&&s.n?Math.round(100*s.c/s.n):null;
+    h+=`<div class="drill"><div class="dh"><b>${esc(d.title)}</b>${pctChip(p)}</div><p class="muted small">${esc(d.intro||DINTRO[d.type])}</p>
+    ${d.type==="subnet"?`<div class="line"><span class="lbl">Type</span><span class="seg" id="skind">${[["mix","Mixed"],["break","Break down"],["hosts","Hosts"],["same","Same subnet?"],["mask","Masks"]].map(([k,t])=>`<button data-k="${k}" aria-pressed="${st.kind===k}">${t}</button>`).join("")}</span></div>
+      <div class="line"><span class="lbl">Level</span><span class="seg" id="slevel"><button data-l="easy" aria-pressed="${st.level!=="hard"}">Last octet (/24 to /30)</button><button data-l="hard" aria-pressed="${st.level==="hard"}">Any octet (/16 to /30)</button></span></div>`:""}
+    <div class="acts"><span class="muted small">${drillSize(d)}${s&&s.runs?` · ${s.runs} session${s.runs===1?"":"s"}${s.best!=null?`, best ${s.best}%`:""}`:""}</span><button class="go" data-drill="${esc(d.id)}">Start</button></div></div>`}
+  return h+`</div>`;
+}
+function wirePractice(el){
+  el.querySelectorAll("#skind button").forEach(b=>b.addEventListener("click",()=>{pset().kind=b.dataset.k;save();el.querySelectorAll("#skind button").forEach(x=>x.setAttribute("aria-pressed",x===b))}));
+  el.querySelectorAll("#slevel button").forEach(b=>b.addEventListener("click",()=>{pset().level=b.dataset.l;save();el.querySelectorAll("#slevel button").forEach(x=>x.setAttribute("aria-pressed",x===b))}));
+  el.querySelectorAll("[data-drill]").forEach(b=>b.addEventListener("click",()=>{const d=B.practice.find(x=>x.id===b.dataset.drill);d&&startDrill(d)}));
+}
+function startDrill(d){pushSub();stopTimer();R=null;F=null;P={d,cards:drillCards(d),i:0,c:0,n:0,miss:[],done:false};newCard();renderDrill()}
+function newCard(){const k=P.cards[P.i];P.checked=false;P.val={};P.sel=k.t==="match"?k.rows.map(()=>""):null;P.pick=null;P.res=null}
+function normAns(type,v){v=String(v||"").trim();if(type==="int")return v.replace(/[,\s]/g,"");if(type==="prefix"){const m=/^\/?\s*(\d{1,2})$/.exec(v);if(m)return String(+m[1]);const n=ip2n(v);if(n!=null){const b=n.toString(2).padStart(32,"0");if(/^1*0*$/.test(b))return String(b.indexOf("0")<0?32:b.indexOf("0"))}return v}
+  if(type==="ip"){const n=ip2n(v);return n==null?v:n2ip(n)}return v.toLowerCase()}
+function renderDrill(){
+  const d=P.d,k=P.cards[P.i],n=P.cards.length;
+  let body="";
+  if(k.t==="fields")body=`<p class="qtext">${k.prompt}</p><div class="dfields">${k.fields.map((f,i)=>{const r=P.res&&P.res[i];return `<label class="dfield ${r==null?"":r?"right":"wrong"}"><span>${esc(f.label)}</span><input data-f="${i}" inputmode="decimal" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(P.val[i]||"")}" ${P.checked?"disabled":""}>${r===false?`<em>Answer: ${esc(f.type==="prefix"?"/"+f.ans:f.ans)}</em>`:""}</label>`}).join("")}</div>`;
+  if(k.t==="choice")body=`${k.x?`<pre class="exhibit" tabindex="0" aria-label="Exhibit">${esc(k.x)}</pre><p class="muted small swipe">Swipe the output sideways to see all of it.</p>`:""}<p class="qtext">${k.prompt}</p><div class="opts">${k.opts.map((o,i)=>{let c="";if(P.checked){if(i===k.ans)c="right";else if(i===P.pick)c="wrong"}return `<button class="opt ${c}" data-pick="${i}" aria-pressed="${P.pick===i}" ${P.checked?"disabled":""}><span class="k">${LETTERS[i]}</span><span>${esc(o)}</span></button>`}).join("")}</div>`;
+  if(k.t==="match")body=`<p class="qtext">Match each ${esc(k.cols[0].toLowerCase())} to its ${esc(k.cols[1].toLowerCase())}.</p><div class="mrows">${k.rows.map((r,i)=>{const res=P.res&&P.res[i];return `<div class="mrow ${res==null?"":res?"right":"wrong"}"><span class="mp">${esc(r.p)}</span><select data-m="${i}" aria-label="${esc(k.cols[1])} for ${esc(r.p)}" ${P.checked?"disabled":""}><option value="">Choose</option>${k.opts.map(o=>`<option ${P.sel[i]===o?"selected":""}>${esc(o)}</option>`).join("")}</select>${res===false?`<em>Answer: ${esc(r.ok.join(" or "))}</em>`:""}</div>`}).join("")}</div>`;
+  if(k.t==="order")body=`<p class="qtext">${k.prompt}</p>${k.intro?`<p class="muted small">${esc(k.intro)}</p>`:""}<ol class="olist">${k.cur.map((ix,pos)=>{const res=P.res&&P.res[pos];return `<li class="${res==null?"":res?"right":"wrong"}"><span class="ot">${esc(k.items[ix])}${res===false?`<em>Should be step ${ix+1}</em>`:""}</span>${P.checked?"":`<span class="mv"><button data-up="${pos}" aria-label="Move up" ${pos===0?"disabled":""}>&#9650;</button><button data-down="${pos}" aria-label="Move down" ${pos===k.cur.length-1?"disabled":""}>&#9660;</button></span>`}</li>`}).join("")}</ol>`;
+  let fb="";
+  if(P.checked){const ok=P.res.every(Boolean);const part=k.t==="match"?`${P.res.filter(Boolean).length} of ${P.res.length} right. `:"";
+    fb=`<div class="feedback ${ok?"ok":"bad"}"><b>${ok?"Correct":"Not quite"}</b><p>${part}${k.t==="order"&&!ok?"The right order is: "+k.items.map((x,i)=>`${i+1}. ${esc(x)}`).join(" "):""}${k.why?(k.t==="order"&&!ok?" ":"")+esc(k.why):""}</p></div>`}
+  app.innerHTML=`
+  <div class="qtop"><h2>${esc(d.title)}</h2><span class="count">${P.i+1} of ${n} · ${P.c} of ${P.n} right</span></div>
+  <div class="progress" aria-hidden="true"><i style="width:${100*P.i/n}%"></i></div>
+  <article class="card drillcard">${body}${fb}
+  <div class="qnav"><button class="btn" id="dquit">End session</button><div class="r">${P.checked?`<button class="btn main" id="dnext">${P.i+1<n?"Next":"See results"}</button>`:`<button class="btn main" id="dcheck">Check</button>`}</div></div></article>`;
+  const g=id=>document.getElementById(id);
+  app.querySelectorAll("[data-f]").forEach(x=>{x.addEventListener("input",()=>{P.val[+x.dataset.f]=x.value});x.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();const nx=app.querySelector(`[data-f="${+x.dataset.f+1}"]`);if(nx)nx.focus();else checkDrill()}})});
+  app.querySelectorAll("[data-pick]").forEach(b=>b.addEventListener("click",()=>{P.pick=+b.dataset.pick;renderDrill()}));
+  app.querySelectorAll("[data-m]").forEach(x=>x.addEventListener("change",()=>{P.sel[+x.dataset.m]=x.value}));
+  const mv=(a,b)=>{const c=k.cur;[c[a],c[b]]=[c[b],c[a]];renderDrill();const f=app.querySelector(`[data-${b<a?"up":"down"}="${b}"]`)||app.querySelector(`[data-up="${b}"],[data-down="${b}"]`);f&&f.focus()};
+  app.querySelectorAll("[data-up]").forEach(b=>b.addEventListener("click",()=>{const i=+b.dataset.up;if(i>0)mv(i,i-1)}));
+  app.querySelectorAll("[data-down]").forEach(b=>b.addEventListener("click",()=>{const i=+b.dataset.down;if(i<k.cur.length-1)mv(i,i+1)}));
+  g("dcheck")&&g("dcheck").addEventListener("click",checkDrill);
+  g("dnext")&&g("dnext").addEventListener("click",()=>{P.i++;if(P.i>=n){drillDone();return}newCard();renderDrill();window.scrollTo({top:0})});
+  g("dquit").addEventListener("click",drillDone);
+  if(k.t==="fields"&&!P.checked){const f=app.querySelector("[data-f]");f&&f.focus({preventScroll:true})}
+}
+function checkDrill(){
+  const k=P.cards[P.i];
+  if(k.t==="fields"){if(!k.fields.some((f,i)=>String(P.val[i]||"").trim()))return;P.res=k.fields.map((f,i)=>normAns(f.type,P.val[i])===normAns(f.type,f.ans))}
+  if(k.t==="choice"){if(P.pick==null)return;P.res=[P.pick===k.ans]}
+  if(k.t==="match"){if(!P.sel.some(Boolean))return;P.res=k.rows.map((r,i)=>r.ok.includes(P.sel[i]))}
+  if(k.t==="order")P.res=k.cur.map((ix,pos)=>ix===pos);
+  const units=k.t==="match"?P.res:[P.res.every(Boolean)];
+  for(const ok of units){P.n++;if(ok)P.c++;logAnswer(P.d.ob||"Practice",ok)}
+  if(!units.every(Boolean))P.miss.push(missText(k));
+  P.checked=true;save();renderDrill();
+  const f=app.querySelector(".feedback");f&&f.scrollIntoView({block:"nearest",behavior:"smooth"});
+}
+function missText(k){
+  const tmp=document.createElement("div");
+  if(k.t==="fields"){tmp.innerHTML=k.prompt;return{q:tmp.textContent,a:k.fields.map(f=>`${f.label}: ${f.type==="prefix"?"/"+f.ans:f.ans}`).join(" · ")}}
+  if(k.t==="choice"){tmp.innerHTML=k.prompt;return{q:tmp.textContent,a:k.opts[k.ans]}}
+  if(k.t==="match")return{q:`Match ${k.cols[0]} to ${k.cols[1]}`,a:k.rows.filter((r,i)=>!P.res[i]).map(r=>`${r.p}: ${r.ok.join(" or ")}`).join(" · ")};
+  tmp.innerHTML=k.prompt;return{q:tmp.textContent,a:k.items.map((x,i)=>`${i+1}. ${x}`).join(" ")}}
+function logDrill(){if(!P||P.logged||!P.n)return;P.logged=true;const d=P.d,s=dstat(d.id);s.c+=P.c;s.n+=P.n;s.runs++;const p=Math.round(100*P.c/P.n);if(P.n>=3)s.best=s.best==null?p:Math.max(s.best,p);logSession({kind:"drill",name:d.title,c:P.c,n:P.n})}
+function drillDone(){
+  const d=P.d;
+  if(!P.n){P=null;homeTab="practice";home();return}
+  logDrill();
+  const p=Math.round(100*P.c/P.n);
+  app.innerHTML=`
+  <div class="qtop"><h2>${esc(d.title)}: done</h2></div>
+  <section class="score"><div class="big">${p}<small>%</small></div><div class="t"><b>${P.c} of ${P.n} right</b><p class="muted">${p>=80?"That's exam-ready territory. Keep it ticking over.":d.type==="subnet"?"Write the block sizes out (128, 64, 32, 16, 8, 4) and go again. It gets quicker every round.":"Have another go. The ones you missed are listed below."}</p></div></section>
+  <div class="actions"><button class="btn main" id="dagain">Go again</button><button class="btn" id="dmenu">Back to practice</button></div>
+  ${P.miss.length?`<h3>To look at again</h3><div class="dmiss">${P.miss.map(m=>`<div><span>${esc(m.q)}</span><span class="muted">${esc(m.a)}</span></div>`).join("")}</div>`:""}`;
+  document.getElementById("dagain").addEventListener("click",()=>startDrill(d));
+  document.getElementById("dmenu").addEventListener("click",()=>{P=null;homeTab="practice";home()});
+  window.scrollTo({top:0});
 }
 function coverageTab(){
   const c=B.coverage;let h=`<div class="note">${c.title?`<h3>${esc(c.title)}</h3>`:""}${c.intro?`<p>${esc(c.intro)}</p>`:""}`;

@@ -52,6 +52,8 @@ A quiz bank is one `.json` file. You can import it on your phone with **All bank
 | `coverage` | Adds a **Coverage check** tab. See the A+ bank for an example. |
 | `labs` | Adds a **Labs** tab: `[{"code": "2.2.2", "title": "Creating VLANs", "ob": "2.2", "summary": "...", "steps": ["..."], "commands": ["switchport access vlan 10"], "needs": ["Packet Tracer"], "files": ["2.2.2-Creating-VLANs-START.pkt"], "link": "https://..."}]`. `needs` and `files` are optional lists shown on the card. `shots` is an optional list of screenshots to take (each gets its own tick box), and `tier` can be `"top"` (shows a Portfolio pick tag), `"good"` or `"skip"`. |
 | `labTips` | Tips shown at the top of the Labs tab: `{"title": "Portfolio tips", "intro": "...", "tips": [["Bold lead-in.", "The rest of the tip."]]}` `link` is optional and must start with https://. Ticked labs count on the Progress tab. |
+| `labsIntro` | Replaces the opening sentence of the Labs tab. Each lab can also have a `group` (for example `"Windows tools"`), and labs are then grouped under those headings in the order given. |
+| `practice` | Adds a **Practice** tab of drills. Each drill has `id`, `title`, `type`, an optional `intro` and an `ob` it counts towards. Types: `"subnet"` (random IPv4 subnetting questions, no other fields needed); `"match"` with `cols` (two column names), `pairs` (`[["SSH","22"], ...]`), `round` (rows per screen, default 6) and `both` (true to also ask the reverse way); `"exhibit"` with `items` (`[{"x": "command output", "q": "...", "o": ["right answer first", "..."], "e": "explanation"}]`); `"order"` with `sets` (`[{"title": "...", "items": ["first step", "second step", "..."], "e": "..."}]`). |
 
 A full working example is in `docs/example-bank.json`.
 
