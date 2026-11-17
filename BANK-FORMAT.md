@@ -50,6 +50,8 @@ A quiz bank is one `.json` file. You can import it on your phone with **All bank
 | `glossary` | Key terms for **Flashcards** and **Pronunciation**: `[{"term": "OSPF", "stands": "Open Shortest Path First", "sayAs": "", "speak": "", "meaning": "...", "module": 2, "objective": "N10 2.1"}]`. `sayAs` is how to say it if it's said as a word (e.g. `"PIX-ee"`); leave it empty if it's spelled out letter by letter. `speak` is optional text for the voice to read. |
 | `labels` | Wording for tags: `{"gap": "Not in notes", "noModule": "Not in your notes", "module": "Module"}`. |
 | `coverage` | Adds a **Coverage check** tab. See the A+ bank for an example. |
+| `labs` | Adds a **Labs** tab: `[{"code": "2.2.2", "title": "Creating VLANs", "ob": "2.2", "summary": "...", "steps": ["..."], "commands": ["switchport access vlan 10"], "needs": ["Packet Tracer"], "files": ["2.2.2-Creating-VLANs-START.pkt"], "link": "https://..."}]`. `needs` and `files` are optional lists shown on the card. `shots` is an optional list of screenshots to take (each gets its own tick box), and `tier` can be `"top"` (shows a Portfolio pick tag), `"good"` or `"skip"`. |
+| `labTips` | Tips shown at the top of the Labs tab: `{"title": "Portfolio tips", "intro": "...", "tips": [["Bold lead-in.", "The rest of the tip."]]}` `link` is optional and must start with https://. Ticked labs count on the Progress tab. |
 
 A full working example is in `docs/example-bank.json`.
 

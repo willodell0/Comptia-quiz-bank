@@ -46,6 +46,13 @@ function normaliseBank(raw){
   b.modules=b.modules&&typeof b.modules==="object"&&Object.keys(b.modules).length?b.modules:null;
   b.exams=Array.isArray(b.exams)?b.exams.filter(x=>x&&x.id!=null&&x.name):[];
   b.glossary=Array.isArray(b.glossary)?b.glossary:[];
+  const lt=b.labTips&&typeof b.labTips==="object"?b.labTips:null;
+  b.labTips=lt?{title:typeof lt.title==="string"?lt.title:"Tips",intro:typeof lt.intro==="string"?lt.intro:"",tips:(Array.isArray(lt.tips)?lt.tips:[]).filter(t=>Array.isArray(t)&&typeof t[0]==="string").map(t=>[t[0],typeof t[1]==="string"?t[1]:""])}:null;
+  b.labs=(Array.isArray(b.labs)?b.labs:[]).filter(x=>x&&typeof x.title==="string"&&x.title.trim()).map((x,i)=>({code:String(x.code||i+1),title:x.title,ob:typeof x.ob==="string"?x.ob:"",summary:typeof x.summary==="string"?x.summary:"",
+    steps:Array.isArray(x.steps)?x.steps.filter(y=>typeof y==="string"):[],commands:Array.isArray(x.commands)?x.commands.filter(y=>typeof y==="string"):[],
+    needs:Array.isArray(x.needs)?x.needs.filter(y=>typeof y==="string"):[],files:Array.isArray(x.files)?x.files.filter(y=>typeof y==="string"):[],
+    shots:Array.isArray(x.shots)?x.shots.filter(y=>typeof y==="string"):[],tier:["top","good","skip"].includes(x.tier)?x.tier:"",
+    link:typeof x.link==="string"&&/^https:\/\//i.test(x.link)?x.link:""}));
   b.labels=Object.assign({gap:"Extra",noModule:"Other questions",noModuleSub:"not linked to a module",module:"Module"},b.labels||{});
   b._problems=problems;
   return b;
@@ -152,7 +159,7 @@ function pushSub(){try{if(!history.state||history.state.v!=="sub")history.pushSt
 function popSub(){if(ignorePop)return;try{if(history.state&&history.state.v==="sub"){ignorePop=true;history.back()}}catch(e){}}
 window.addEventListener("popstate",()=>{
   if(ignorePop){ignorePop=false;return}
-  if(R&&!R.done&&R.mode==="exam"&&R.items.some(x=>x.pick!==null)){
+  if(R&&!R.done&&R.mode==="exam"&&!window.QB_EMBEDDED&&R.items.some(x=>x.pick!==null)){
     if(!confirm("Leave this quiz? It won't be marked.")){pushSub();return}
   }
   if(R||F){if(B)home();return}
@@ -192,7 +199,7 @@ function openBank(bank){
 
 /* ---------- bank home ---------- */
 let homeTab="domain";
-function tabs(){const t=[];if(DOM)t.push(["domain","Exam domains"]);if(MODS)t.push(["module","Course modules"]);t.push(["objective","Objectives"]);t.push(["progress","Progress"]);if(G.length){t.push(["flash","Flashcards"]);t.push(["say","Pronunciation"])}if(B.coverage)t.push(["coverage","Coverage check"]);return t}
+function tabs(){const t=[];if(DOM)t.push(["domain","Exam domains"]);if(MODS)t.push(["module","Course modules"]);t.push(["objective","Objectives"]);t.push(["progress","Progress"]);if(G.length){t.push(["flash","Flashcards"]);t.push(["say","Pronunciation"])}if(B.labs.length)t.push(["labs","Labs"]);if(B.coverage)t.push(["coverage","Coverage check"]);return t}
 function examsWithDomains(){return B.exams.filter(ex=>DOM&&Object.values(DOM).some(d=>String(d.exam)===String(ex.id)))}
 function home(){
   stopTimer();R=null;F=null;
@@ -242,6 +249,7 @@ function renderTab(){
   if(homeTab==="objective")el.innerHTML=objectiveTab();
   if(homeTab==="coverage")el.innerHTML=coverageTab();
   if(homeTab==="progress"){el.innerHTML=progressTab();wireProgress(el)}
+  if(homeTab==="labs"){el.innerHTML=labsTab();wireLabs(el)}
   if(homeTab==="flash"){el.innerHTML=flashTab();wireFlashTab(el)}
   if(homeTab==="say"){el.innerHTML=sayTab();wireSayTab(el)}
   el.querySelectorAll("[data-start]").forEach(b=>b.addEventListener("click",()=>{
@@ -328,6 +336,7 @@ function progressTab(){
     ["Overall accuracy",N?Math.round(100*C/N)+"%":"–",N?`${C.toLocaleString("en-GB")} correct`:"answer some questions"],
     ["Study streak",`${streak()} day${streak()===1?"":"s"}`,`${active.length} day${active.length===1?"":"s"} studied in total`],
     ["Mock exams",String(mocks.length),cards?`${cards} flashcards reviewed`:"timed, weighted like the real exam"]];
+  if(B.labs.length){const done=B.labs.filter(l=>(S.labsDone||[]).includes(l.code)).length;tiles.push(["Labs done",`${done} of ${B.labs.length}`,done===B.labs.length?"all labs ticked off":"tick labs off in the Labs tab"])}
   let h=`<div class="tiles">${tiles.map(t=>`<div class="tile"><span class="tl">${t[0]}</span><span class="tv">${esc(t[1])}</span><span class="ts">${esc(t[2])}</span></div>`).join("")}</div>`;
   if(N&&!active.length)h+=`<p class="notice">Your earlier answers are counted in the totals. Daily charts start from today, as the app didn't record dates before this update.</p>`;
   // daily activity
@@ -379,6 +388,39 @@ document.addEventListener("pointerout",e=>{if(e.pointerType==="mouse"&&e.target.
 document.addEventListener("click",e=>{const t=e.target.closest&&e.target.closest("[data-tip]");if(t)showTip(t,e);else tip.hidden=true});
 addEventListener("scroll",()=>{tip.hidden=true},{passive:true});
 
+
+/* ---------- labs ---------- */
+function labsTab(){
+  const done=new Set(S.labsDone||[]);const n=B.labs.filter(l=>done.has(l.code)).length;
+  const groups={};for(const l of B.labs){const m=l.code.split(".")[0];const k=MODS&&m in MODS?"m:"+m:(l.ob&&DOM?domKey(l.ob):"_");(groups[k]=groups[k]||[]).push(l)}
+  let h=`<div class="fsetup"><p>${B.labs.length} hands-on labs from your course. Each card says what the lab practises and the key steps and commands to remember. Tick a lab off when you've done it. You've done <b>${n} of ${B.labs.length}</b>.</p>
+    <div class="progress" aria-hidden="true"><i style="width:${100*n/B.labs.length}%"></i></div></div>
+  ${B.labTips?`<details class="obj tips" data-tips="1"${lsGet("qb-tipsopen:"+B.id,true)?" open":""}><summary><span>${esc(B.labTips.title)}</span></summary><div class="inner">${B.labTips.intro?`<p>${esc(B.labTips.intro)}</p>`:""}<ul>${B.labTips.tips.map(t=>`<li><b>${esc(t[0])}</b> ${esc(t[1])}</li>`).join("")}</ul></div></details>`:""}
+  <div class="rows">`;
+  let opened=false;
+  for(const k of Object.keys(groups).sort(natCmp)){const ls=groups[k];const dn=ls.filter(l=>done.has(l.code)).length;
+    const op=(lsGet("qb-labopen:"+B.id,null)===k)||(!opened&&lsGet("qb-labopen:"+B.id,null)==null&&dn<ls.length);if(op)opened=true;
+    h+=`<details class="obj" data-grp="${esc(k)}"${op?" open":""}><summary><span>${esc(k==="_"?"Labs":k.startsWith("m:")?modName(k.slice(2)):domTitle(k))} <span class="muted">· ${dn} of ${ls.length} done</span></span></summary><div class="inner">`;
+    for(const l of ls){const d=done.has(l.code);
+      h+=`<div class="lab ${d?"done":""}"><div class="labhead"><label class="labtick"><input type="checkbox" data-lab="${esc(l.code)}" ${d?"checked":""}> <span class="code">${esc(l.code)}</span> <b>${esc(l.title)}</b></label><span class="chips">${l.tier==="top"?'<span class="tag pick">Portfolio pick</span>':""}${l.ob?`<span class="tag">${esc(obLabel(l.ob))}</span>`:""}</span></div>
+        ${l.summary?`<p class="labsum">${esc(l.summary)}</p>`:""}
+        ${l.needs.length?`<div class="labcol"><span class="lbl">You'll need</span><div class="chips">${l.needs.map(x=>`<span class="tag">${esc(x)}</span>`).join("")}</div></div>`:""}
+        ${l.files.length?`<div class="labcol"><span class="lbl">Files from your lab folder</span><ul class="files">${l.files.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`:""}
+        ${l.steps.length?`<div class="labcol"><span class="lbl">Steps</span><ol>${l.steps.map(x=>`<li>${esc(x)}</li>`).join("")}</ol></div>`:""}
+        ${l.shots.length?`<div class="labcol shots"><span class="lbl">Portfolio shots</span>${l.shots.map((x,j)=>{const key=l.code+"#"+j;const got=(S.shotsDone||[]).includes(key);return `<label class="shot"><input type="checkbox" data-shot="${esc(key)}" ${got?"checked":""}> <span>${esc(x)}</span></label>`}).join("")}</div>`:(l.tier==="skip"?'<p class="muted small">Not needed for your portfolio.</p>':"")}
+        ${l.commands.length?`<div class="labcol"><span class="lbl">Key commands and points</span><ul class="cmds">${l.commands.map(x=>`<li><code>${esc(x)}</code></li>`).join("")}</ul></div>`:""}
+        <div class="acts">${l.link?`<a class="go ghost" href="${esc(l.link)}" target="_blank" rel="noopener noreferrer">Open lab</a>`:""}${l.ob&&byOb[l.ob]?`<button class="go ghost" data-start="ob|${esc(l.ob)}">Practise ${esc(obLabel(l.ob))}</button>`:""}</div></div>`}
+    h+=`</div></details>`}
+  return h+`</div>`;
+}
+function wireLabs(el){
+  const td=el.querySelector("details[data-tips]");td&&td.addEventListener("toggle",()=>lsSet("qb-tipsopen:"+B.id,td.open));
+  el.querySelectorAll("[data-shot]").forEach(c=>c.addEventListener("change",()=>{S.shotsDone=(S.shotsDone||[]).filter(x=>x!==c.dataset.shot);if(c.checked)S.shotsDone.push(c.dataset.shot);save()}));
+  el.querySelectorAll("details[data-grp]").forEach(d=>d.addEventListener("toggle",()=>{if(d.open)lsSet("qb-labopen:"+B.id,d.dataset.grp)}));
+  el.querySelectorAll("[data-lab]").forEach(c=>c.addEventListener("change",()=>{
+    S.labsDone=(S.labsDone||[]).filter(x=>x!==c.dataset.lab);if(c.checked){S.labsDone.push(c.dataset.lab);today().l=(today().l||0)+1}save();
+    const y=scrollY;renderTab();scrollTo(0,y)}));
+}
 function coverageTab(){
   const c=B.coverage;let h=`<div class="note">${c.title?`<h3>${esc(c.title)}</h3>`:""}${c.intro?`<p>${esc(c.intro)}</p>`:""}`;
   if(c.table&&Array.isArray(c.table.rows))h+=`<div class="tablewrap"><table><thead><tr>${(c.table.head||[]).map(x=>`<th>${esc(x)}</th>`).join("")}</tr></thead><tbody>${c.table.rows.map(r=>`<tr>${r.map((x,i)=>`<td class="${i?"mono":""}">${esc(x)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;

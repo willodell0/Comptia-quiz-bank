@@ -293,6 +293,30 @@ label.btn{display:inline-flex;align-items:center;cursor:pointer}
 .orow .sub{color:var(--muted);font-size:.85rem}
 #tip{position:absolute;z-index:20;background:var(--ink);color:var(--surface);font-size:.85rem;padding:6px 10px;border-radius:6px;max-width:260px;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.2)}
 #tip[hidden]{display:none}
+
+/* labs tab */
+.lab{border-top:1px solid var(--line);padding:12px 2px}
+.lab:first-child{border-top:0}
+.labhead{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;justify-content:space-between}
+.labtick{display:flex;gap:8px;align-items:baseline;cursor:pointer;min-width:0}
+.labtick input{width:20px;height:20px;flex:none;align-self:center;accent-color:var(--ok)}
+.labtick .code{font-family:var(--f-mono);font-size:.85rem;color:var(--muted)}
+.lab.done b{text-decoration:line-through;text-decoration-color:var(--muted)}
+.labsum{margin:6px 0 8px;font-size:.95rem}
+.labcol{margin:6px 0}
+.labcol .lbl{display:block;font-size:.8rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
+.labcol ol,.labcol ul{margin:0;padding-left:20px}
+.cmds{list-style:none;padding-left:0!important;display:flex;flex-wrap:wrap;gap:6px}
+.cmds code{font-family:var(--f-mono);font-size:.85rem;background:var(--sunk);border:1px solid var(--line);border-radius:6px;padding:2px 6px;display:inline-block;word-break:break-word}
+.lab .acts{margin-top:8px}
+.labcol .chips{margin:0}
+.labhead .chips{margin:0}
+.tag.pick{background:var(--chart);color:var(--surface);border-color:transparent;font-weight:700}
+.shots{background:var(--sunk);border-radius:8px;padding:8px 10px}
+.shot{display:flex;gap:8px;align-items:flex-start;font-size:.92rem;padding:3px 0;cursor:pointer}
+.shot input{width:18px;height:18px;flex:none;margin-top:2px;accent-color:var(--ok)}
+.tips{margin-bottom:12px}.tips ul{margin:6px 0 0;padding-left:20px}.tips li{margin:4px 0}
+.files{font-family:var(--f-mono);font-size:.82rem;word-break:break-word}
 </style>
 </head>
 <body>
