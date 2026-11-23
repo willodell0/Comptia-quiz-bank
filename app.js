@@ -463,8 +463,25 @@ function parseGuide(md){
     const m=/\b(?:220-)?(1201|1202)\b/.exec(gr.title);gr.prefix=m?m[1]+" ":""}
   return groups.filter(gr=>gr.title||gr.blocks.length);
 }
-function kwList(){const g=B.guide;if(g&&g.keywords.length)return g.keywords;return (B.glossary||[]).map(x=>({term:x.term,stands:x.stands||"",meaning:x.meaning||"",ob:x.objective?String(x.objective):""}))}
-function kwMap(){if(GP&&GP.kwm)return GP.kwm;const m=new Map();for(const k of kwList())m.set(k.term.toLowerCase(),k);GP.kwm=m;return m}
+function kwBase(){const g=B.guide;if(g&&g.keywords.length)return g.keywords;return (B.glossary||[]).map(x=>({term:x.term,stands:x.stands||"",meaning:x.meaning||"",ob:x.objective?String(x.objective):""}))}
+function myKw(){if(!Array.isArray(S.myKw))S.myKw=[];return S.myKw}
+function kwList(){return kwBase().concat(myKw().map(k=>Object.assign({mine:true},k))).sort((a,b)=>a.term.replace(/^\./,"").localeCompare(b.term.replace(/^\./,""),"en",{numeric:true,sensitivity:"base"}))}
+function kwMap(){if(GP&&GP.kwm)return GP.kwm;const m=new Map();for(const k of kwBase())m.set(k.term.toLowerCase(),k);for(const k of myKw())if(!m.has(k.term.toLowerCase()))m.set(k.term.toLowerCase(),Object.assign({mine:true},k));GP.kwm=m;return m}
+let GF=null;
+function kwForm(){const f=GF,obs=Object.keys(OBJ||{}).sort(natCmp);
+  return `<div class="kwform" role="group" aria-label="${f.id?"Edit keyword":"Add a keyword"}"><b class="kft">${f.id?"Edit your keyword":"Add a keyword"}</b>
+  <label>Term<input id="kf-term" maxlength="80" value="${esc(f.term)}" autocomplete="off" placeholder="For example: OSPF"></label>
+  <label>Stands for <span class="muted">(optional)</span><input id="kf-stands" maxlength="120" value="${esc(f.stands)}" autocomplete="off" placeholder="For example: Open Shortest Path First"></label>
+  <label>What it means<textarea id="kf-meaning" maxlength="600" rows="3" placeholder="One or two sentences in your own words">${esc(f.meaning)}</textarea></label>
+  <label>Objective <span class="muted">(optional)</span><select id="kf-ob"><option value="">None</option>${obs.map(o=>`<option value="${esc(o)}" ${f.ob===o?"selected":""}>${esc(obLabel(o))} ${esc((objTitle(o)||"").slice(0,60))}</option>`).join("")}</select></label>
+  <label>Where you checked it <span class="muted">(optional, such as a web link or your notes)</span><input id="kf-src" maxlength="300" value="${esc(f.src)}" autocomplete="off" placeholder="https://..."></label>
+  <p class="muted small">Check new terms against the official CompTIA objectives or a trusted source before you add them, so you don't learn something wrong.</p>
+  ${f.err?`<p class="kferr" role="alert">${esc(f.err)}</p>`:""}
+  <div class="kfacts"><a class="btn" id="kf-search" href="${esc(kwSearchUrl(f.term))}" target="_blank" rel="noopener noreferrer">Look it up</a><span class="r"><button class="btn" id="kf-cancel">Cancel</button><button class="btn main" id="kf-save">${f.id?"Save changes":"Add keyword"}</button></span></div></div>`}
+function kwSearchUrl(t){return "https://duckduckgo.com/?q="+encodeURIComponent(((B.title||"")+" "+(t||"")).trim()+" meaning")}
+function kwCard(k,q){const src=k.src||"";const link=/^https:\/\//i.test(src);
+  return `<div class="kwe${k.mine?" mine":""}"><div class="kh"><b>${hl(k.term,q)}</b><span class="tags">${k.mine?`<span class="tag pick">Yours</span>`:""}${k.ob?`<span class="tag">${esc(k.ob)}</span>`:""}</span></div>${k.stands?`<div class="ks">${hl(k.stands,q)}</div>`:""}<div class="km">${hl(k.meaning,q)}</div>
+  ${k.mine?`${src?`<div class="ksrc">Source: ${link?`<a href="${esc(src)}" target="_blank" rel="noopener noreferrer">${esc(src.replace(/^https:\/\/(www\.)?/i,"").slice(0,60))}</a>`:esc(src)}</div>`:""}<div class="kacts"><button class="lnk" data-kedit="${esc(k.id)}">Edit</button><button class="lnk" data-kdel="${esc(k.id)}">${GF&&GF.del===k.id?"Tap again to delete":"Delete"}</button></div>`:""}</div>`}
 function kwFind(t){const m=kwMap(),k=t.replace(/\*/g,"").toLowerCase();const hit=m.get(k)||(k.endsWith("s")&&m.get(k.slice(0,-1)))||(k.endsWith("es")&&m.get(k.slice(0,-2)));if(hit)return hit;if(k.length<3)return null;const p=k+" ";for(const [t,v] of m)if(t.startsWith(p))return v;return null}
 function hl(t,q){const s=esc(t);if(!q)return s;const re=new RegExp("("+q.replace(/[.*+?^${}()|[\]\\]/g,"\\$&").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")+")","gi");return s.replace(re,"<mark>$1</mark>")}
 function gInline(s,q){
@@ -483,16 +500,18 @@ function gBlocks(bs,q){const chk=gChecks();return bs.map(b=>{
 function gChecks(){const o=lsGet("qb-guidechk:"+B.id,{});return o&&typeof o==="object"?o:{}}
 function gOpen(){const a=lsGet("qb-guideopen:"+B.id,[]);return new Set(Array.isArray(a)?a:[])}
 function guideTab(){
-  if(!GP||GP.id!==B.id){GP={id:B.id,groups:parseGuide(B.guide.md)};GQ="";GV=lsGet("qb-guideview:"+B.id,"guide")}
+  if(!GP||GP.id!==B.id){GP={id:B.id,groups:parseGuide(B.guide.md)};GQ="";GF=null;GV=lsGet("qb-guideview:"+B.id,"guide")}
   const kw=kwList().length;
   return `<div class="gtools"><input id="gq" type="search" placeholder="${GV==="kw"?"Search keywords":"Search the guide"}" value="${esc(GQ)}" autocomplete="off" aria-label="Search">
   ${kw?`<span class="seg" id="gview"><button data-v="guide" aria-pressed="${GV!=="kw"}">Guide</button><button data-v="kw" aria-pressed="${GV==="kw"}">Keywords (${kw})</button></span>`:""}</div>
   <div id="gbody"></div><div id="kwpop" class="kwpop" hidden></div>`}
 function renderGuideBody(){
   const el=document.getElementById("gbody");if(!el)return;const q=GQ.trim().toLowerCase();
-  if(GV==="kw"){const list=kwList().filter(k=>!q||(k.term+" "+k.stands+" "+k.meaning).toLowerCase().includes(q));
-    el.innerHTML=`<p class="muted small">${q?`${list.length} matching`:`${list.length} terms, A to Z`}. Tap a bold word in the guide to see its entry.</p>
-    <div class="kwl-list">${list.map(k=>`<div class="kwe"><div class="kh"><b>${hl(k.term,q)}</b>${k.ob?`<span class="tag">${esc(k.ob)}</span>`:""}</div>${k.stands?`<div class="ks">${hl(k.stands,q)}</div>`:""}<div class="km">${hl(k.meaning,q)}</div></div>`).join("")||`<p class="empty">No keywords match.</p>`}</div>`;
+  if(GV==="kw"){const list=kwList().filter(k=>!q||(k.term+" "+k.stands+" "+k.meaning).toLowerCase().includes(q)),mine=myKw().length;
+    el.innerHTML=`${GF&&GF.open?kwForm():`<div class="kwtop"><button class="btn main" id="kw-add">+ Add keyword</button><span class="muted small">${q?`${list.length} matching`:`${list.length} terms, A to Z${mine?`, ${mine} added by you`:""}`}. Tap a bold word in the guide to see its entry.</span></div>`}
+    <div class="kwl-list">${list.map(k=>kwCard(k,q)).join("")||`<p class="empty">No keywords match.${q?` <button class="lnk" id="kw-addq">Add "${esc(GQ.trim())}" as a keyword</button>`:""}</p>`}</div>`;
+    const kb=document.querySelector('#gview [data-v="kw"]');if(kb)kb.textContent=`Keywords (${kwList().length})`;
+    const t=document.getElementById("kf-term");if(t){t.addEventListener("input",()=>{const a=document.getElementById("kf-search");if(a)a.href=kwSearchUrl(t.value)});if(!GF.focused){GF.focused=1;t.focus()}}
     return}
   const open=gOpen();let h="",hits=0;
   GP.groups.forEach((g,gi)=>{
@@ -510,12 +529,28 @@ function renderGuideBody(){
 function wireGuide(root){
   const inp=document.getElementById("gq");
   inp.addEventListener("input",()=>{GQ=inp.value;renderGuideBody()});
-  root.querySelectorAll("#gview button").forEach(b=>b.addEventListener("click",()=>{GV=b.dataset.v;lsSet("qb-guideview:"+B.id,GV);root.querySelectorAll("#gview button").forEach(x=>x.setAttribute("aria-pressed",x===b));inp.placeholder=GV==="kw"?"Search keywords":"Search the guide";renderGuideBody()}));
+  root.querySelectorAll("#gview button").forEach(b=>b.addEventListener("click",()=>{GV=b.dataset.v;GF=null;lsSet("qb-guideview:"+B.id,GV);root.querySelectorAll("#gview button").forEach(x=>x.setAttribute("aria-pressed",x===b));inp.placeholder=GV==="kw"?"Search keywords":"Search the guide";renderGuideBody()}));
   const body=document.getElementById("gbody"),pop=document.getElementById("kwpop");
   body.addEventListener("toggle",e=>{const d=e.target;if(!d.matches||!d.matches("details.gsec")||GQ.trim())return;const s=gOpen();d.open?s.add(d.dataset.g):s.delete(d.dataset.g);lsSet("qb-guideopen:"+B.id,[...s])},true);
   body.addEventListener("change",e=>{const c=e.target.closest("[data-gchk]");if(!c)return;const o=gChecks();if(c.checked)o[c.dataset.gchk]=1;else delete o[c.dataset.gchk];lsSet("qb-guidechk:"+B.id,o)});
   const showKw=t=>{const k=kwFind(t);if(!k)return;pop.innerHTML=`<div class="kh"><b>${esc(k.term)}</b>${k.ob?`<span class="tag">${esc(k.ob)}</span>`:""}<button class="x" aria-label="Close">&times;</button></div>${k.stands?`<div class="ks">${esc(k.stands)}</div>`:""}<div class="km">${esc(k.meaning)}</div>`;pop.hidden=false;pop.querySelector(".x").addEventListener("click",()=>{pop.hidden=true})};
-  body.addEventListener("click",e=>{const k=e.target.closest("[data-kw]");if(k){showKw(k.dataset.kw);return}const b=e.target.closest("[data-gob]");if(b){const ob=b.dataset.gob;start(byOb[ob]||[],`${obLabel(ob)} ${objTitle(ob)}`)}});
+  const readForm=()=>{for(const [k,id] of [["term","kf-term"],["stands","kf-stands"],["meaning","kf-meaning"],["ob","kf-ob"],["src","kf-src"]]){const x=document.getElementById(id);if(x)GF[k]=x.value}};
+  body.addEventListener("click",e=>{
+    const t=e.target;if(GF&&GF.del&&!t.closest("[data-kdel]")){GF=null;renderGuideBody()}
+    if(t.closest("#kw-add")||t.closest("#kw-addq")){GF={open:1,id:null,term:t.closest("#kw-addq")?GQ.trim():"",stands:"",meaning:"",ob:"",src:""};renderGuideBody();body.scrollIntoView({block:"start",behavior:"smooth"});return}
+    if(t.closest("#kf-cancel")){GF=null;renderGuideBody();return}
+    if(t.closest("#kf-save")){readForm();const term=GF.term.trim(),meaning=GF.meaning.trim();
+      if(!term||!meaning){GF.err="Add the term and what it means.";renderGuideBody();return}
+      const lc=term.toLowerCase();
+      if(kwBase().some(k=>k.term.toLowerCase()===lc)){GF.err=`"${term}" is already in the keywords. Search for it to see the entry.`;renderGuideBody();return}
+      if(myKw().some(k=>k.term.toLowerCase()===lc&&k.id!==GF.id)){GF.err=`You've already added "${term}".`;renderGuideBody();return}
+      const src=GF.src.trim();if(src&&/^[a-z]+:/i.test(src)&&!/^https:\/\//i.test(src)){GF.err="Links need to start with https://";renderGuideBody();return}
+      const rec={id:GF.id||("k"+Date.now().toString(36)+Math.random().toString(36).slice(2,6)),term:term.slice(0,80),stands:GF.stands.trim().slice(0,120),meaning:meaning.slice(0,600),ob:GF.ob&&OBJ&&OBJ[GF.ob]?GF.ob:"",src:src.slice(0,300),added:GF.added||new Date().toISOString().slice(0,10)};
+      const L=myKw(),i=L.findIndex(k=>k.id===rec.id);if(i>=0)L[i]=rec;else L.push(rec);
+      save();GP.kwm=null;GF=null;renderGuideBody();return}
+    const ed=t.closest("[data-kedit]");if(ed){const k=myKw().find(x=>x.id===ed.dataset.kedit);if(k){GF=Object.assign({open:1},k);renderGuideBody();body.scrollIntoView({block:"start",behavior:"smooth"})}return}
+    const dl=t.closest("[data-kdel]");if(dl){const id=dl.dataset.kdel;if(GF&&GF.del===id){S.myKw=myKw().filter(x=>x.id!==id);save();GP.kwm=null;GF=null}else GF={del:id};renderGuideBody();return}
+    const k=t.closest("[data-kw]");if(k){showKw(k.dataset.kw);return}const b=e.target.closest("[data-gob]");if(b){const ob=b.dataset.gob;start(byOb[ob]||[],`${obLabel(ob)} ${objTitle(ob)}`)}});
   body.addEventListener("keydown",e=>{const k=e.target.closest("[data-kw]");if(k&&(e.key==="Enter"||e.key===" ")){e.preventDefault();showKw(k.dataset.kw)}});
   renderGuideBody();
 }
