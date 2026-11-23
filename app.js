@@ -63,6 +63,8 @@ function normaliseBank(raw){
     if(d.type==="order"){o.sets=(Array.isArray(d.sets)?d.sets:[]).filter(x=>x&&Array.isArray(x.items)&&x.items.length>=3&&x.items.length<=12&&x.items.every(y=>typeof y==="string"&&y.trim())&&new Set(x.items).size===x.items.length).map(x=>({title:str(x.title)||o.title,intro:str(x.intro),items:x.items.slice(),e:str(x.e)}));if(!o.sets.length)return null}
     return o}).filter(Boolean);
   b.labsIntro=typeof raw.labsIntro==="string"?raw.labsIntro:"";
+  const rg=raw.guide;b.guide=rg&&typeof rg.md==="string"&&rg.md.trim()?{title:typeof rg.title==="string"?rg.title:"Study guide",md:rg.md.slice(0,600000),
+    keywords:(Array.isArray(rg.keywords)?rg.keywords:[]).filter(k=>k&&typeof k.term==="string"&&k.term.trim()&&typeof k.meaning==="string").map(k=>({term:k.term,stands:typeof k.stands==="string"?k.stands:"",meaning:k.meaning,ob:typeof k.ob==="string"?k.ob:""}))}:null;
   b.labels=Object.assign({gap:"Extra",noModule:"Other questions",noModuleSub:"not linked to a module",module:"Module"},b.labels||{});
   b._problems=problems;
   return b;
@@ -209,7 +211,7 @@ function openBank(bank){
 
 /* ---------- bank home ---------- */
 let homeTab="domain";
-function tabs(){const t=[];if(DOM)t.push(["domain","Exam domains"]);if(MODS)t.push(["module","Course modules"]);t.push(["objective","Objectives"]);if(B.practice.length)t.push(["practice","Practice"]);t.push(["progress","Progress"]);if(G.length){t.push(["flash","Flashcards"]);t.push(["say","Pronunciation"])}if(B.labs.length)t.push(["labs","Labs"]);if(B.coverage)t.push(["coverage","Coverage check"]);return t}
+function tabs(){const t=[];if(DOM)t.push(["domain","Exam domains"]);if(MODS)t.push(["module","Course modules"]);t.push(["objective","Objectives"]);if(B.guide)t.push(["guide","Study guide"]);if(B.practice.length)t.push(["practice","Practice"]);t.push(["progress","Progress"]);if(G.length){t.push(["flash","Flashcards"]);t.push(["say","Pronunciation"])}if(B.labs.length)t.push(["labs","Labs"]);if(B.coverage)t.push(["coverage","Coverage check"]);return t}
 function examsWithDomains(){return B.exams.filter(ex=>DOM&&Object.values(DOM).some(d=>String(d.exam)===String(ex.id)))}
 function home(){
   stopTimer();R=null;F=null;logDrill();P=null;
@@ -264,6 +266,7 @@ function renderTab(){
   if(homeTab==="progress"){el.innerHTML=progressTab();wireProgress(el)}
   if(homeTab==="labs"){el.innerHTML=labsTab();wireLabs(el)}
   if(homeTab==="practice"){el.innerHTML=practiceTab();wirePractice(el)}
+  if(homeTab==="guide"){el.innerHTML=guideTab();wireGuide(el)}
   if(homeTab==="flash"){el.innerHTML=flashTab();wireFlashTab(el)}
   if(homeTab==="say"){el.innerHTML=sayTab();wireSayTab(el)}
   el.querySelectorAll("[data-start]").forEach(b=>b.addEventListener("click",()=>{
@@ -435,6 +438,86 @@ function wireLabs(el){
   el.querySelectorAll("[data-lab]").forEach(c=>c.addEventListener("change",()=>{
     S.labsDone=(S.labsDone||[]).filter(x=>x!==c.dataset.lab);if(c.checked){S.labsDone.push(c.dataset.lab);today().l=(today().l||0)+1}save();
     const y=scrollY;renderTab();scrollTo(0,y)}));
+}
+/* ---------- study guide ---------- */
+let GP=null,GQ="",GV=null;
+function parseGuide(md){
+  const lines=String(md).replace(/\r/g,"").split("\n"),groups=[];let g=null,sub=null,para=[],i=0;
+  const target=()=>sub?sub.blocks:g.blocks;
+  const flush=()=>{if(para.length&&g){target().push({t:"p",s:para.join(" ")})}para=[]};
+  g={title:"",blocks:[],subs:[]};groups.push(g);
+  while(i<lines.length){const L=lines[i];
+    if(/^#\s/.test(L)){flush();i++;continue}
+    if(/^##\s/.test(L)){flush();g={title:L.replace(/^##\s+/,""),blocks:[],subs:[]};groups.push(g);sub=null;i++;continue}
+    if(/^###\s/.test(L)){flush();sub={title:L.replace(/^###\s+/,""),blocks:[]};g.subs.push(sub);i++;continue}
+    if(/^\s*\|/.test(L)){flush();const rows=[];while(i<lines.length&&/^\s*\|/.test(lines[i])){rows.push(lines[i].trim().replace(/^\||\|$/g,"").split("|").map(c=>c.trim()));i++}
+      const sep=rows.length>1&&rows[1].every(c=>/^:?-{2,}:?$/.test(c));target().push({t:"table",head:sep?rows[0]:null,rows:sep?rows.slice(2):rows});continue}
+    if(/^\s*-\s/.test(L)){flush();const items=[];while(i<lines.length&&/^\s*-\s/.test(lines[i])){const m=/^\s*-\s+(\[( |x|X)\]\s+)?(.*)$/.exec(lines[i]);items.push({s:m[3],chk:m[1]?true:false});i++}target().push({t:"ul",items});continue}
+    if(/^\s*\d+\.\s/.test(L)){flush();const items=[];while(i<lines.length&&/^\s*\d+\.\s/.test(lines[i])){items.push(lines[i].replace(/^\s*\d+\.\s+/,""));i++}target().push({t:"ol",items});continue}
+    if(!L.trim()){flush();i++;continue}
+    para.push(L.trim());i++}
+  flush();
+  const plain=s=>s.replace(/\*\*|`/g,"").replace(/\[([^\]]+)\]\([^)]+\)/g,"$1");
+  const btext=bs=>bs.map(b=>b.t==="p"?b.s:b.t==="table"?[b.head||[]].concat(b.rows).map(r=>r.join(" ")).join(" "):b.items.map(x=>x.s||x).join(" ")).join(" ");
+  for(const gr of groups){gr.text=plain(gr.title+" "+btext(gr.blocks)).toLowerCase();for(const s of gr.subs)s.text=plain(s.title+" "+btext(s.blocks)).toLowerCase();
+    const m=/\b(?:220-)?(1201|1202)\b/.exec(gr.title);gr.prefix=m?m[1]+" ":""}
+  return groups.filter(gr=>gr.title||gr.blocks.length);
+}
+function kwList(){const g=B.guide;if(g&&g.keywords.length)return g.keywords;return (B.glossary||[]).map(x=>({term:x.term,stands:x.stands||"",meaning:x.meaning||"",ob:x.objective?String(x.objective):""}))}
+function kwMap(){if(GP&&GP.kwm)return GP.kwm;const m=new Map();for(const k of kwList())m.set(k.term.toLowerCase(),k);GP.kwm=m;return m}
+function kwFind(t){const m=kwMap(),k=t.replace(/\*/g,"").toLowerCase();const hit=m.get(k)||(k.endsWith("s")&&m.get(k.slice(0,-1)))||(k.endsWith("es")&&m.get(k.slice(0,-2)));if(hit)return hit;if(k.length<3)return null;const p=k+" ";for(const [t,v] of m)if(t.startsWith(p))return v;return null}
+function hl(t,q){const s=esc(t);if(!q)return s;const re=new RegExp("("+q.replace(/[.*+?^${}()|[\]\\]/g,"\\$&").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")+")","gi");return s.replace(re,"<mark>$1</mark>")}
+function gInline(s,q){
+  let out="",re=/\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)\]\((https:\/\/[^)\s]+)\)/g,last=0,m;
+  while((m=re.exec(s))){out+=hl(s.slice(last,m.index),q);
+    if(m[1]!=null){const k=kwFind(m[1]);out+=k?`<b class="kwl" role="button" tabindex="0" data-kw="${esc(k.term)}">${hl(m[1],q)}</b>`:`<b>${hl(m[1],q)}</b>`}
+    else if(m[2]!=null)out+=`<code>${hl(m[2],q)}</code>`;
+    else out+=`<a href="${esc(m[4])}" target="_blank" rel="noopener noreferrer">${hl(m[3],q)}</a>`;
+    last=re.lastIndex}
+  return out+hl(s.slice(last),q)}
+function gBlocks(bs,q){const chk=gChecks();return bs.map(b=>{
+  if(b.t==="p")return `<p>${gInline(b.s,q)}</p>`;
+  if(b.t==="ol")return `<ol>${b.items.map(x=>`<li>${gInline(x,q)}</li>`).join("")}</ol>`;
+  if(b.t==="ul")return `<ul class="${b.items.some(x=>x.chk)?"gchk":""}">${b.items.map(x=>x.chk?`<li><label><input type="checkbox" data-gchk="${esc(x.s)}" ${chk[x.s]?"checked":""}><span>${gInline(x.s,q)}</span></label></li>`:`<li>${gInline(x.s,q)}</li>`).join("")}</ul>`;
+  return `<div class="gtable"><table>${b.head?`<thead><tr>${b.head.map(c=>`<th>${gInline(c,q)}</th>`).join("")}</tr></thead>`:""}<tbody>${b.rows.map(r=>`<tr>${r.map(c=>`<td>${gInline(c,q)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`}).join("")}
+function gChecks(){const o=lsGet("qb-guidechk:"+B.id,{});return o&&typeof o==="object"?o:{}}
+function gOpen(){const a=lsGet("qb-guideopen:"+B.id,[]);return new Set(Array.isArray(a)?a:[])}
+function guideTab(){
+  if(!GP||GP.id!==B.id){GP={id:B.id,groups:parseGuide(B.guide.md)};GQ="";GV=lsGet("qb-guideview:"+B.id,"guide")}
+  const kw=kwList().length;
+  return `<div class="gtools"><input id="gq" type="search" placeholder="${GV==="kw"?"Search keywords":"Search the guide"}" value="${esc(GQ)}" autocomplete="off" aria-label="Search">
+  ${kw?`<span class="seg" id="gview"><button data-v="guide" aria-pressed="${GV!=="kw"}">Guide</button><button data-v="kw" aria-pressed="${GV==="kw"}">Keywords (${kw})</button></span>`:""}</div>
+  <div id="gbody"></div><div id="kwpop" class="kwpop" hidden></div>`}
+function renderGuideBody(){
+  const el=document.getElementById("gbody");if(!el)return;const q=GQ.trim().toLowerCase();
+  if(GV==="kw"){const list=kwList().filter(k=>!q||(k.term+" "+k.stands+" "+k.meaning).toLowerCase().includes(q));
+    el.innerHTML=`<p class="muted small">${q?`${list.length} matching`:`${list.length} terms, A to Z`}. Tap a bold word in the guide to see its entry.</p>
+    <div class="kwl-list">${list.map(k=>`<div class="kwe"><div class="kh"><b>${hl(k.term,q)}</b>${k.ob?`<span class="tag">${esc(k.ob)}</span>`:""}</div>${k.stands?`<div class="ks">${hl(k.stands,q)}</div>`:""}<div class="km">${hl(k.meaning,q)}</div></div>`).join("")||`<p class="empty">No keywords match.</p>`}</div>`;
+    return}
+  const open=gOpen();let h="",hits=0;
+  GP.groups.forEach((g,gi)=>{
+    if(!g.title){if(!q)h+=`<div class="gintro">${gBlocks(g.blocks,"")}</div>`;return}
+    const subs=g.subs.filter(s=>!q||s.text.includes(q));
+    if(q&&!subs.length&&!(g.blocks.length&&gBlocks(g.blocks,"").replace(/<[^>]+>/g,"").toLowerCase().includes(q)))return;
+    hits+=q?subs.length||1:0;
+    const intro=g.blocks.length&&(!q||gBlocks(g.blocks,"").replace(/<[^>]+>/g,"").toLowerCase().includes(q));
+    h+=`<details class="gsec" data-g="${gi}" ${q||open.has(String(gi))?"open":""}><summary>${hl(g.title,q)}${g.subs.length?`<span class="muted small"> · ${q?`${subs.length} of `:""}${g.subs.length} section${g.subs.length===1?"":"s"}</span>`:""}</summary><div class="gbody">
+      ${intro?gBlocks(g.blocks,q):""}
+      ${subs.map(s=>{const m=/^(\d+\.\d+)\s/.exec(s.title),ob=m?g.prefix+m[1]:"";return `<section class="gsub"><h3>${gInline(s.title,q)}</h3>${gBlocks(s.blocks,q)}${ob&&byOb[ob]&&byOb[ob].length?`<div class="acts"><button class="go ghost" data-gob="${esc(ob)}">Practise ${esc(obLabel(ob))} (${byOb[ob].length})</button></div>`:""}</section>`}).join("")}
+    </div></details>`});
+  el.innerHTML=(q?`<p class="muted small">${hits?`${hits} section${hits===1?"":"s"} mention "${esc(GQ.trim())}"`:`Nothing in the guide mentions "${esc(GQ.trim())}".`}</p>`:"")+h;
+}
+function wireGuide(root){
+  const inp=document.getElementById("gq");
+  inp.addEventListener("input",()=>{GQ=inp.value;renderGuideBody()});
+  root.querySelectorAll("#gview button").forEach(b=>b.addEventListener("click",()=>{GV=b.dataset.v;lsSet("qb-guideview:"+B.id,GV);root.querySelectorAll("#gview button").forEach(x=>x.setAttribute("aria-pressed",x===b));inp.placeholder=GV==="kw"?"Search keywords":"Search the guide";renderGuideBody()}));
+  const body=document.getElementById("gbody"),pop=document.getElementById("kwpop");
+  body.addEventListener("toggle",e=>{const d=e.target;if(!d.matches||!d.matches("details.gsec")||GQ.trim())return;const s=gOpen();d.open?s.add(d.dataset.g):s.delete(d.dataset.g);lsSet("qb-guideopen:"+B.id,[...s])},true);
+  body.addEventListener("change",e=>{const c=e.target.closest("[data-gchk]");if(!c)return;const o=gChecks();if(c.checked)o[c.dataset.gchk]=1;else delete o[c.dataset.gchk];lsSet("qb-guidechk:"+B.id,o)});
+  const showKw=t=>{const k=kwFind(t);if(!k)return;pop.innerHTML=`<div class="kh"><b>${esc(k.term)}</b>${k.ob?`<span class="tag">${esc(k.ob)}</span>`:""}<button class="x" aria-label="Close">&times;</button></div>${k.stands?`<div class="ks">${esc(k.stands)}</div>`:""}<div class="km">${esc(k.meaning)}</div>`;pop.hidden=false;pop.querySelector(".x").addEventListener("click",()=>{pop.hidden=true})};
+  body.addEventListener("click",e=>{const k=e.target.closest("[data-kw]");if(k){showKw(k.dataset.kw);return}const b=e.target.closest("[data-gob]");if(b){const ob=b.dataset.gob;start(byOb[ob]||[],`${obLabel(ob)} ${objTitle(ob)}`)}});
+  body.addEventListener("keydown",e=>{const k=e.target.closest("[data-kw]");if(k&&(e.key==="Enter"||e.key===" ")){e.preventDefault();showKw(k.dataset.kw)}});
+  renderGuideBody();
 }
 /* ---------- practice drills ---------- */
 let P=null;

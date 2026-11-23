@@ -90,7 +90,7 @@ button{font:inherit;color:inherit}
 .settings .lbl{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 
 /* tabs */
-.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:18px;overflow-x:auto}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:18px;flex-wrap:wrap}
 .tabs button{border:0;background:none;padding:10px 12px;cursor:pointer;font-weight:600;color:var(--muted);border-bottom:3px solid transparent;white-space:nowrap}
 .tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
 
@@ -331,7 +331,7 @@ label.btn{display:inline-flex;align-items:center;cursor:pointer}
 .tabsel{display:none;align-items:center;gap:10px;margin-bottom:16px}
 .tabsel select{flex:1;font:inherit;font-weight:600;font-size:1rem;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);min-width:0}
 .tabsel select:focus{outline:2px solid var(--accent);outline-offset:1px}
-@media (max-width:640px){.tabsel{display:flex}.tabs{display:none}}
+@media (max-width:900px){.tabsel{display:flex}.tabs{display:none}}
 .swipe{display:none;margin-top:-8px}
 @media (max-width:640px){.exhibit{font-size:.72rem}.swipe{display:block}}
 .dfields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:12px}
@@ -362,6 +362,42 @@ label.btn{display:inline-flex;align-items:center;cursor:pointer}
 .dmiss>div{display:grid;gap:3px;padding:10px 14px;border-top:1px solid var(--line)}
 .dmiss>div:first-child{border-top:0}
 .dmiss .muted{font-size:.88rem}
+
+/* study guide */
+.gtools{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
+.gtools input{flex:1 1 220px;font:inherit;font-size:1rem;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);min-width:0}
+.gtools input:focus{outline:2px solid var(--accent);outline-offset:1px}
+.gintro{margin-bottom:12px}
+.gsec{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);margin-bottom:10px}
+.gsec>summary{cursor:pointer;padding:14px 16px;font-family:var(--f-display);font-weight:600;font-size:1.05rem;line-height:1.35}
+.gsec[open]>summary{border-bottom:1px solid var(--line)}
+.gbody{padding:4px 16px 14px}
+.gsub{border-top:1px solid var(--line);padding-top:6px;margin-top:14px}
+.gsub:first-child{border-top:0;margin-top:0}
+.gsub h3{font-size:1.02rem;margin:12px 0 6px;line-height:1.35}
+.gbody p,.gintro p{margin:8px 0;line-height:1.6}
+.gbody ul,.gbody ol,.gintro ul,.gintro ol{margin:6px 0 10px;padding-left:1.3rem;line-height:1.55}
+.gbody li,.gintro li{margin:4px 0}
+.gbody ul.gchk{list-style:none;padding-left:0}
+.gchk label{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
+.gchk input{width:18px;height:18px;margin-top:3px;flex:none;accent-color:var(--ok)}
+.gtable{overflow-x:auto;margin:8px 0 12px;border:1px solid var(--line);border-radius:8px}
+.gtable table{border-collapse:collapse;width:100%;font-size:.9rem}
+.gtable th,.gtable td{text-align:left;padding:7px 10px;border-top:1px solid var(--line);vertical-align:top}
+.gtable th{background:var(--sunk);border-top:0;font-weight:600}
+.gbody code,.gintro code{font-family:var(--f-mono);font-size:.85em;background:var(--sunk);padding:1px 5px;border-radius:4px}
+.gbody a,.gintro a{color:var(--accent)}
+.kwl{cursor:pointer;text-decoration:underline dotted;text-decoration-color:var(--muted);text-underline-offset:3px}
+.kwl:focus{outline:2px solid var(--accent);outline-offset:1px;border-radius:3px}
+mark{background:var(--warn-soft);color:inherit;border-radius:3px;padding:0 1px}
+.gsub .acts{margin-top:8px}
+.kwl-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));gap:8px}
+.kwe,.kwpop{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:10px 12px}
+.kwe .kh,.kwpop .kh{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ks{font-size:.85rem;color:var(--muted);margin-top:2px}
+.km{margin-top:4px;line-height:1.5;font-size:.93rem}
+.kwpop{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));max-width:520px;margin:0 auto;z-index:50;box-shadow:0 8px 30px rgba(0,0,0,.25)}
+.kwpop .x{border:0;background:none;color:var(--ink);font-size:1.5rem;line-height:1;cursor:pointer;padding:0 4px;margin-left:auto}
 </style>
 </head>
 <body>
