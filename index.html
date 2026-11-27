@@ -363,6 +363,26 @@ label.btn{display:inline-flex;align-items:center;cursor:pointer}
 .dmiss>div:first-child{border-top:0}
 .dmiss .muted{font-size:.88rem}
 
+/* read aloud */
+.ghead{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.ghead h3{flex:1}
+.gsay{display:inline-flex;align-items:center;gap:5px;border:0;background:none;padding:4px 2px;color:var(--accent);font:inherit;font-size:.88rem;font-weight:600;cursor:pointer;white-space:nowrap}
+.gsay svg{flex:none}
+.gsay-all{margin:8px 0 2px}
+.gsub.reading{background:var(--sunk);border-radius:8px;box-shadow:-4px 0 0 var(--accent);padding-left:10px;margin-left:-10px;padding-right:6px}
+.kwpop .ksay{margin-left:auto;padding:2px 6px}
+.kwpop .ksay+.x{margin-left:0}
+.ttsbar{position:fixed;left:0;right:0;bottom:0;z-index:60;background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -6px 24px rgba(0,0,0,.18);padding:8px 12px calc(8px + env(safe-area-inset-bottom));display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;justify-content:center}
+.tt-now{display:grid;gap:1px;min-width:0;flex:1 1 220px;max-width:520px}
+.tt-now b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.95rem}
+.tt-ctl{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center}
+.tt-ctl button{width:38px;height:38px;display:grid;place-items:center;border:1px solid var(--line);border-radius:50%;background:var(--bg);color:var(--ink);cursor:pointer;padding:0}
+.tt-ctl button.main{background:var(--accent);border-color:var(--accent);color:#fff;width:44px;height:44px}
+.tt-ctl button.tt-cont{width:auto;height:36px;border-radius:18px;padding:0 12px;font:inherit;font-size:.85rem;font-weight:600}
+.tt-ctl button.tt-cont[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.tt-ctl select{font:inherit;font-size:.85rem;padding:7px 4px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);max-width:120px}
+body.tts-on main,body.tts-on #app{padding-bottom:170px}
+body.tts-on .kwpop{bottom:calc(160px + env(safe-area-inset-bottom))}
 /* study guide */
 .gtools{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
 .gtools input{flex:1 1 220px;font:inherit;font-size:1rem;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);min-width:0}

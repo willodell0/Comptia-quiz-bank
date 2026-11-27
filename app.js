@@ -94,7 +94,7 @@ async function loadLibrary(){
 }
 function progressFor(id){const s=lsGet("qb-progress:"+id,null);if(!s||!s.stats)return null;let c=0,n=0;for(const k in s.stats){c+=s.stats[k].c;n+=s.stats[k].n}return{c,n,missed:(s.missed||[]).length}}
 function library(msg){
-  B=null;stopTimer();R=null;F=null;
+  ttsStop();B=null;stopTimer();R=null;F=null;
   document.title="Quiz Bank";
   setBar("Quiz Bank",`${LIB.length} bank${LIB.length===1?"":"s"}`,prevBank?"Back":null);
   document.getElementById("bankfoot").hidden=true;
@@ -214,7 +214,7 @@ let homeTab="domain";
 function tabs(){const t=[];if(DOM)t.push(["domain","Exam domains"]);if(MODS)t.push(["module","Course modules"]);t.push(["objective","Objectives"]);if(B.guide)t.push(["guide","Study guide"]);if(B.practice.length)t.push(["practice","Practice"]);t.push(["progress","Progress"]);if(G.length){t.push(["flash","Flashcards"]);t.push(["say","Pronunciation"])}if(B.labs.length)t.push(["labs","Labs"]);if(B.coverage)t.push(["coverage","Coverage check"]);return t}
 function examsWithDomains(){return B.exams.filter(ex=>DOM&&Object.values(DOM).some(d=>String(d.exam)===String(ex.id)))}
 function home(){
-  stopTimer();R=null;F=null;logDrill();P=null;
+  stopTimer();R=null;F=null;logDrill();P=null;ttsStop();
   setBar(B.title,`${Q.length} questions`,"All banks");
   popSub();
   const bf=document.getElementById("bankfoot");bf.textContent=B.footer||"";bf.hidden=!B.footer;
@@ -258,6 +258,7 @@ function home(){
   document.getElementById("tabsel").addEventListener("change",e=>setTab(e.target.value));
 }
 function renderTab(){
+  ttsStop();
   const el=document.getElementById("tabbody");
   if(homeTab==="domain")el.innerHTML=domainTab();
   if(homeTab==="module")el.innerHTML=moduleTab();
@@ -521,9 +522,11 @@ function renderGuideBody(){
     hits+=q?subs.length||1:0;
     const intro=g.blocks.length&&(!q||gBlocks(g.blocks,"").replace(/<[^>]+>/g,"").toLowerCase().includes(q));
     h+=`<details class="gsec" data-g="${gi}" ${q||open.has(String(gi))?"open":""}><summary>${hl(g.title,q)}${g.subs.length?`<span class="muted small"> · ${q?`${subs.length} of `:""}${g.subs.length} section${g.subs.length===1?"":"s"}</span>`:""}</summary><div class="gbody">
+      ${TTS&&!q?`<div class="gsay-all"><button class="lnk gsay" data-say="${gi}:-1">${TTI.spk}<span>Listen to this whole domain</span></button></div>`:""}
       ${intro?gBlocks(g.blocks,q):""}
-      ${subs.map(s=>{const m=/^(\d+\.\d+)\s/.exec(s.title),ob=m?g.prefix+m[1]:"";return `<section class="gsub"><h3>${gInline(s.title,q)}</h3>${gBlocks(s.blocks,q)}${ob&&byOb[ob]&&byOb[ob].length?`<div class="acts"><button class="go ghost" data-gob="${esc(ob)}">Practise ${esc(obLabel(ob))} (${byOb[ob].length})</button></div>`:""}</section>`}).join("")}
+      ${subs.map(s=>{const m=/^(\d+\.\d+)\s/.exec(s.title),ob=m?g.prefix+m[1]:"",si=g.subs.indexOf(s);return `<section class="gsub" data-sec="${gi}:${si}"><div class="ghead"><h3>${gInline(s.title,q)}</h3>${TTS?`<button class="lnk gsay" data-say="${gi}:${si}" aria-label="Listen to ${esc(sayPlain(s.title))}">${TTI.spk}<span>Listen</span></button>`:""}</div>${gBlocks(s.blocks,q)}${ob&&byOb[ob]&&byOb[ob].length?`<div class="acts"><button class="go ghost" data-gob="${esc(ob)}">Practise ${esc(obLabel(ob))} (${byOb[ob].length})</button></div>`:""}</section>`}).join("")}
     </div></details>`});
+  if(TT)setTimeout(()=>ttsMark(),0);
   el.innerHTML=(q?`<p class="muted small">${hits?`${hits} section${hits===1?"":"s"} mention "${esc(GQ.trim())}"`:`Nothing in the guide mentions "${esc(GQ.trim())}".`}</p>`:"")+h;
 }
 function wireGuide(root){
@@ -533,7 +536,7 @@ function wireGuide(root){
   const body=document.getElementById("gbody"),pop=document.getElementById("kwpop");
   body.addEventListener("toggle",e=>{const d=e.target;if(!d.matches||!d.matches("details.gsec")||GQ.trim())return;const s=gOpen();d.open?s.add(d.dataset.g):s.delete(d.dataset.g);lsSet("qb-guideopen:"+B.id,[...s])},true);
   body.addEventListener("change",e=>{const c=e.target.closest("[data-gchk]");if(!c)return;const o=gChecks();if(c.checked)o[c.dataset.gchk]=1;else delete o[c.dataset.gchk];lsSet("qb-guidechk:"+B.id,o)});
-  const showKw=t=>{const k=kwFind(t);if(!k)return;pop.innerHTML=`<div class="kh"><b>${esc(k.term)}</b>${k.ob?`<span class="tag">${esc(k.ob)}</span>`:""}<button class="x" aria-label="Close">&times;</button></div>${k.stands?`<div class="ks">${esc(k.stands)}</div>`:""}<div class="km">${esc(k.meaning)}</div>`;pop.hidden=false;pop.querySelector(".x").addEventListener("click",()=>{pop.hidden=true})};
+  const showKw=t=>{const k=kwFind(t);if(!k)return;pop.innerHTML=`<div class="kh"><b>${esc(k.term)}</b>${k.ob?`<span class="tag">${esc(k.ob)}</span>`:""}${TTS?`<button class="lnk gsay ksay" aria-label="Listen">${TTI.spk}</button>`:""}<button class="x" aria-label="Close">&times;</button></div>${k.stands?`<div class="ks">${esc(k.stands)}</div>`:""}<div class="km">${esc(k.meaning)}</div>`;pop.hidden=false;pop.querySelector(".x").addEventListener("click",()=>{pop.hidden=true});const ks=pop.querySelector(".ksay");if(ks)ks.addEventListener("click",()=>ttsSayOnce(`${k.term}. ${k.stands?k.stands+". ":""}${k.meaning}`))};
   const readForm=()=>{for(const [k,id] of [["term","kf-term"],["stands","kf-stands"],["meaning","kf-meaning"],["ob","kf-ob"],["src","kf-src"]]){const x=document.getElementById(id);if(x)GF[k]=x.value}};
   body.addEventListener("click",e=>{
     const t=e.target;if(GF&&GF.del&&!t.closest("[data-kdel]")){GF=null;renderGuideBody()}
@@ -550,10 +553,67 @@ function wireGuide(root){
       save();GP.kwm=null;GF=null;renderGuideBody();return}
     const ed=t.closest("[data-kedit]");if(ed){const k=myKw().find(x=>x.id===ed.dataset.kedit);if(k){GF=Object.assign({open:1},k);renderGuideBody();body.scrollIntoView({block:"start",behavior:"smooth"})}return}
     const dl=t.closest("[data-kdel]");if(dl){const id=dl.dataset.kdel;if(GF&&GF.del===id){S.myKw=myKw().filter(x=>x.id!==id);save();GP.kwm=null;GF=null}else GF={del:id};renderGuideBody();return}
+    const sy=t.closest("[data-say]");if(sy){const [a,c]=sy.dataset.say.split(":").map(Number);ttsStart(a,c);return}
     const k=t.closest("[data-kw]");if(k){showKw(k.dataset.kw);return}const b=e.target.closest("[data-gob]");if(b){const ob=b.dataset.gob;start(byOb[ob]||[],`${obLabel(ob)} ${objTitle(ob)}`)}});
   body.addEventListener("keydown",e=>{const k=e.target.closest("[data-kw]");if(k&&(e.key==="Enter"||e.key===" ")){e.preventDefault();showKw(k.dataset.kw)}});
   renderGuideBody();
 }
+/* ---------- read aloud ---------- */
+const TTS=typeof window!=="undefined"&&"speechSynthesis" in window&&typeof SpeechSynthesisUtterance!=="undefined";
+let TT=null;
+const TTI={prev:'<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg>',next:'<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg>',play:'<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M7 4v16l13-8z"/></svg>',pause:'<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>',stop:'<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M6 6h12v12H6z"/></svg>',spk:'<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M4 9v6h4l5 4V5L8 9H4zm12.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg>'};
+function ttsPrefs(){const p=lsGet("qb-tts",{})||{};return{rate:+p.rate||1,voice:p.voice||"",cont:!!p.cont}}
+function ttsVoices(){if(!TTS)return[];try{const en=speechSynthesis.getVoices().filter(v=>/^en([-_]|$)/i.test(v.lang)),gb=en.filter(v=>/^en[-_]GB/i.test(v.lang));return gb.length?gb:en}catch(e){return[]}}
+function ttsVoice(){const vs=ttsVoices(),p=ttsPrefs();return vs.find(v=>v.name===p.voice)||vs.find(v=>/en[-_]GB/i.test(v.lang))||vs[0]||null}
+function sayPlain(s){return String(s).replace(/\*\*|`/g,"").replace(/\[([^\]]+)\]\([^)]+\)/g,"$1").replace(/\s+/g," ").trim()}
+function sayFix(s){return s.replace(/(\d)-(\d)/g,"$1 $2").replace(/\be\.g\./gi,"for example").replace(/\bi\.e\./gi,"that is").replace(/ · /g,", ")}
+function blocksSay(bs){const out=[];for(const b of bs){
+  if(b.t==="p")out.push(sayPlain(b.s));
+  else if(b.t==="ul"||b.t==="ol")b.items.forEach((x,i)=>{const t=sayPlain(x.s!=null?x.s:x);out.push(b.t==="ol"?`${i+1}. ${t}`:t)});
+  else if(b.t==="table")for(const r of b.rows)out.push(r.map((c,i)=>{const h=b.head&&b.head[i]?sayPlain(b.head[i]):"",v=sayPlain(c);return !v?"":h&&i>0?`${h}: ${v}`:v}).filter(Boolean).join(". "))}
+  return out.filter(Boolean).map(t=>/[.!?:]$/.test(t)?t:t+".")}
+function ttsChunks(parts){const out=[];for(const p of parts){let cur="";for(const s of sayFix(p).replace(/([.!?])\s+/g,"$1\u0001").split("\u0001")){if(cur&&(cur+" "+s).length>220){out.push(cur);cur=s}else cur=cur?cur+" "+s:s}if(cur)out.push(cur)}return out}
+function ttsItems(gi,si){const g=GP&&GP.groups[gi],items=[];if(!g)return items;
+  if(si<0&&g.blocks.length)items.push({gi,si:-1,title:g.title,parts:[sayPlain(g.title)+"."].concat(blocksSay(g.blocks))});
+  const from=si<0?0:si;g.subs.slice(from).forEach((s,k)=>items.push({gi,si:from+k,title:s.title,parts:[sayPlain(s.title)+"."].concat(blocksSay(s.blocks))}));
+  return items}
+function ttsMore(T){if(!ttsPrefs().cont||!GP)return false;let gi=T.items[T.items.length-1].gi+1;
+  while(gi<GP.groups.length){const g=GP.groups[gi];if(g.title){const add=ttsItems(gi,-1);if(add.length){T.items=T.items.concat(add);return true}}gi++}return false}
+function ttsStart(gi,si){
+  if(!TTS||!GP)return;ttsStop();const items=ttsItems(gi,si);
+  if(!items.length)return;TT={items,i:0,c:0,chunks:null,paused:false,gen:0};ttsBar();ttsPlay(true)}
+function ttsPlay(scroll){const T=TT;if(!T)return;const it=T.items[T.i];if(!it){ttsStop();return}
+  if(!T.chunks)T.chunks=ttsChunks(it.parts);
+  if(T.c>=T.chunks.length){if(T.i+1>=T.items.length&&!ttsMore(T)){ttsStop();return}T.i++;T.c=0;T.chunks=null;ttsBar();ttsPlay(true);return}
+  const u=new SpeechSynthesisUtterance(T.chunks[T.c]),v=ttsVoice();u.lang=v?v.lang:"en-GB";if(v)try{u.voice=v}catch(e){}u.rate=ttsPrefs().rate;
+  const gen=T.gen;u.onend=()=>{if(TT!==T||T.gen!==gen||T.paused)return;T.c++;ttsPlay()};
+  u.onerror=e=>{if(TT!==T||T.gen!==gen||T.paused)return;if(e&&(e.error==="interrupted"||e.error==="canceled"))return;T.c++;ttsPlay()};
+  try{speechSynthesis.speak(u)}catch(e){ttsStop();return}ttsMark(scroll)}
+function ttsHalt(){if(TT)TT.gen++;try{speechSynthesis.cancel()}catch(e){}}
+function ttsStop(){if(!TTS)return;const had=!!TT;ttsHalt();TT=null;ttsBar();if(had)ttsMark()}
+function ttsGo(d){const T=TT;if(!T)return;ttsHalt();T.paused=false;
+  if(d<0&&T.c>1)T.c=0;else{if(d>0&&T.i+1>=T.items.length)ttsMore(T);const n=T.i+d;if(n<0||n>=T.items.length){if(n<0)T.c=0;else{ttsStop();return}}else{T.i=n;T.c=0;T.chunks=null}}
+  ttsBar();ttsPlay(true)}
+function ttsMark(scroll){document.querySelectorAll(".gsub.reading").forEach(x=>x.classList.remove("reading"));if(!TT)return;const it=TT.items[TT.i];if(!it||it.si<0)return;
+  const el=document.querySelector(`[data-sec="${it.gi}:${it.si}"]`);if(!el)return;el.classList.add("reading");
+  if(scroll){const d=el.closest("details");if(d&&!d.open)d.open=true;el.scrollIntoView({block:"start",behavior:"smooth"})}}
+function ttsBar(){let b=document.getElementById("ttsbar");
+  if(!TT){if(b)b.remove();document.body.classList.remove("tts-on");return}
+  if(!b){b=document.createElement("div");b.id="ttsbar";b.className="ttsbar";b.setAttribute("role","region");b.setAttribute("aria-label","Read aloud");document.body.appendChild(b);
+    b.addEventListener("click",e=>{const x=e.target.closest("[data-tt]");if(!x||!TT)return;const a=x.dataset.tt;
+      if(a==="play"){if(TT.paused){TT.paused=false;ttsBar();ttsPlay()}else{TT.paused=true;ttsHalt();ttsBar()}}
+      else if(a==="cont"){const p=ttsPrefs();p.cont=!p.cont;lsSet("qb-tts",p);ttsBar()}
+      else if(a==="prev")ttsGo(-1);else if(a==="next")ttsGo(1);else if(a==="stop")ttsStop()});
+    b.addEventListener("change",e=>{const x=e.target.closest("select[data-tt]");if(!x)return;const p=ttsPrefs();if(x.dataset.tt==="rate")p.rate=+x.value;else p.voice=x.value;lsSet("qb-tts",p);
+      if(TT&&!TT.paused){ttsHalt();ttsPlay()}})}
+  document.body.classList.add("tts-on");const T=TT,it=T.items[T.i]||{},p=ttsPrefs(),vs=ttsVoices(),cv=ttsVoice();
+  b.innerHTML=`<div class="tt-now"><span class="muted small">${T.paused?"Paused":"Reading"} · ${T.i+1} of ${T.items.length}${p.cont?", then on to the next domain":""}</span><b>${esc(sayPlain(it.title||""))}</b></div>
+  <div class="tt-ctl"><button data-tt="prev" aria-label="Previous section">${TTI.prev}</button><button data-tt="play" class="main" aria-label="${T.paused?"Play":"Pause"}">${T.paused?TTI.play:TTI.pause}</button><button data-tt="next" aria-label="Next section">${TTI.next}</button><button data-tt="stop" aria-label="Stop reading">${TTI.stop}</button>
+  <button data-tt="cont" class="tt-cont" aria-pressed="${p.cont}" title="Keep reading into the next domain">Continuous</button>
+  <select data-tt="rate" aria-label="Reading speed">${[0.8,1,1.2,1.4,1.6].map(r=>`<option value="${r}" ${r===p.rate?"selected":""}>${r}x</option>`).join("")}</select>
+  ${vs.length>1?`<select data-tt="voice" aria-label="Voice">${vs.map(v=>`<option value="${esc(v.name)}" ${cv&&v.name===cv.name?"selected":""}>${esc(v.name.replace(/^(Microsoft|Google)\s+/,"").replace(/\s+Online.*$/,"").slice(0,28))}</option>`).join("")}</select>`:""}</div>`}
+function ttsSayOnce(text){if(!TTS)return;ttsStop();const u=new SpeechSynthesisUtterance(sayFix(text)),v=ttsVoice();u.lang=v?v.lang:"en-GB";if(v)try{u.voice=v}catch(e){}u.rate=ttsPrefs().rate;try{speechSynthesis.cancel();speechSynthesis.speak(u)}catch(e){}}
+if(TTS)try{speechSynthesis.addEventListener("voiceschanged",()=>{if(TT)ttsBar()})}catch(e){}
 /* ---------- practice drills ---------- */
 let P=null;
 const rnd=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
@@ -828,7 +888,7 @@ let R=null,timerId=null;
 function stopTimer(){if(timerId){clearInterval(timerId);timerId=null}}
 function makeItems(list){return list.map(q=>({q,order:shuffle(q.o.map((_,i)=>i)),pick:null,checked:false,flag:false}))}
 function start(list,name,opt){
-  opt=opt||{};F=null;
+  opt=opt||{};F=null;ttsStop();
   let pool=poolFilter(list);if(!pool.length)pool=list;
   if(!pool.length)return;
   pool=shuffle(pool);
